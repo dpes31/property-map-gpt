@@ -1,6 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
+declare global {
+  interface Window {
+    kakao?: any;
+  }
+}
 
 type Candidate = {
   name: string;
@@ -15,16 +21,20 @@ type Candidate = {
   type: string;
   reason: string;
   risk: string;
+  lat: number;
+  lng: number;
 };
 
 const baseCandidates: Candidate[] = [
-  { name: '잠실 엘스', region: '서울 송파구 잠실동', score: 87, grade: 'A', commute: 48, shuttle: 6, price: 23.5, growth: 12.4, liquidity: 18, type: '실거주+투자 균형형', reason: '논현 출근성과 셔틀 접근성이 모두 우수한 균형형 후보', risk: '가격 상단부 진입' },
-  { name: '트리지움', region: '서울 송파구 잠실동', score: 84, grade: 'B', commute: 50, shuttle: 8, price: 21.8, growth: 10.2, liquidity: 15, type: '대단지 유동성형', reason: '잠실 생활권과 대단지 유동성을 함께 확보', risk: '평형별 가격 편차 확인 필요' },
-  { name: '과천자이', region: '경기 과천시 별양동', score: 81, grade: 'B', commute: 59, shuttle: 5, price: 22.5, growth: 15.1, liquidity: 9, type: '셔틀+신축 희소형', reason: '셔틀 접근성과 과천 신축 희소성이 강점', risk: '논현 출근시간은 조건부 확인 필요' },
-  { name: '프레스티어자이', region: '경기 과천시 별양동', score: 79, grade: 'B', commute: 60, shuttle: 7, price: 24.8, growth: 13.7, liquidity: 4, type: '장기보유 후보형', reason: '과천 원도심 신축 대단지 후보', risk: '입주 전 데이터와 분양가 선반영 주의' },
-  { name: '분당 파크뷰', region: '경기 성남시 분당구 정자동', score: 76, grade: 'B', commute: 67, shuttle: 6, price: 21.0, growth: 8.8, liquidity: 11, type: '학군·정주성형', reason: '분당 학군·정주성·셔틀 접근성 양호', risk: '논현 출근 60분 조건은 초과 가능' },
-  { name: '디에이치퍼스티어아이파크', region: '서울 강남구 개포동', score: 82, grade: 'B', commute: 42, shuttle: 9, price: 25.5, growth: 9.5, liquidity: 12, type: '강남 신축 상품형', reason: '강남 접근성과 신축 상품성이 강함', risk: '기본 예산 상단 초과 가능' },
+  { name: '잠실 엘스', region: '서울 송파구 잠실동', score: 87, grade: 'A', commute: 48, shuttle: 6, price: 23.5, growth: 12.4, liquidity: 18, type: '실거주+투자 균형형', reason: '논현 출근성과 셔틀 접근성이 모두 우수한 균형형 후보', risk: '가격 상단부 진입', lat: 37.5121, lng: 127.0841 },
+  { name: '트리지움', region: '서울 송파구 잠실동', score: 84, grade: 'B', commute: 50, shuttle: 8, price: 21.8, growth: 10.2, liquidity: 15, type: '대단지 유동성형', reason: '잠실 생활권과 대단지 유동성을 함께 확보', risk: '평형별 가격 편차 확인 필요', lat: 37.5101, lng: 127.0918 },
+  { name: '과천자이', region: '경기 과천시 별양동', score: 81, grade: 'B', commute: 59, shuttle: 5, price: 22.5, growth: 15.1, liquidity: 9, type: '셔틀+신축 희소형', reason: '셔틀 접근성과 과천 신축 희소성이 강점', risk: '논현 출근시간은 조건부 확인 필요', lat: 37.4265, lng: 126.9915 },
+  { name: '프레스티어자이', region: '경기 과천시 별양동', score: 79, grade: 'B', commute: 60, shuttle: 7, price: 24.8, growth: 13.7, liquidity: 4, type: '장기보유 후보형', reason: '과천 원도심 신축 대단지 후보', risk: '입주 전 데이터와 분양가 선반영 주의', lat: 37.4287, lng: 126.9918 },
+  { name: '분당 파크뷰', region: '경기 성남시 분당구 정자동', score: 76, grade: 'B', commute: 67, shuttle: 6, price: 21.0, growth: 8.8, liquidity: 11, type: '학군·정주성형', reason: '분당 학군·정주성·셔틀 접근성 양호', risk: '논현 출근 60분 조건은 초과 가능', lat: 37.3715, lng: 127.1065 },
+  { name: '디에이치퍼스티어아이파크', region: '서울 강남구 개포동', score: 82, grade: 'B', commute: 42, shuttle: 9, price: 25.5, growth: 9.5, liquidity: 12, type: '강남 신축 상품형', reason: '강남 접근성과 신축 상품성이 강함', risk: '기본 예산 상단 초과 가능', lat: 37.4792, lng: 127.0579 },
 ];
+
+const companyAnchor = { name: '논현 목적지', lat: 37.5117, lng: 127.0305 };
 
 function recalc(c: Candidate, maxPrice: number, maxCommute: number) {
   let score = c.score;
@@ -44,6 +54,68 @@ function Bar({ label, value }: { label: string; value: number }) {
   );
 }
 
+function useKakaoMap(containerRef: React.RefObject<HTMLDivElement | null>, candidates: Candidate[]) {
+  const [status, setStatus] = useState<'ready' | 'loading' | 'missing-key' | 'error'>('loading');
+
+  useEffect(() => {
+    const appKey = process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY;
+    if (!appKey) {
+      setStatus('missing-key');
+      return;
+    }
+    if (!containerRef.current) return;
+
+    const drawMap = () => {
+      try {
+        if (!containerRef.current || !window.kakao?.maps) return;
+        const center = new window.kakao.maps.LatLng(37.4979, 127.0276);
+        const map = new window.kakao.maps.Map(containerRef.current, { center, level: 9 });
+        const bounds = new window.kakao.maps.LatLngBounds();
+
+        const companyPosition = new window.kakao.maps.LatLng(companyAnchor.lat, companyAnchor.lng);
+        new window.kakao.maps.Marker({ map, position: companyPosition, title: companyAnchor.name });
+        bounds.extend(companyPosition);
+
+        candidates.forEach((candidate) => {
+          const position = new window.kakao.maps.LatLng(candidate.lat, candidate.lng);
+          const marker = new window.kakao.maps.Marker({ map, position, title: candidate.name });
+          const info = new window.kakao.maps.InfoWindow({
+            content: `<div style="padding:8px 10px;font-size:12px;font-weight:700;white-space:nowrap">${candidate.name}<br/><span style="font-weight:400;color:#64748b">${candidate.grade} ${candidate.score}점 · ${candidate.commute}분</span></div>`,
+          });
+          window.kakao.maps.event.addListener(marker, 'click', () => info.open(map, marker));
+          bounds.extend(position);
+        });
+
+        map.setBounds(bounds);
+        setStatus('ready');
+      } catch {
+        setStatus('error');
+      }
+    };
+
+    if (window.kakao?.maps) {
+      window.kakao.maps.load(drawMap);
+      return;
+    }
+
+    const existing = document.querySelector<HTMLScriptElement>('script[data-kakao-map="true"]');
+    if (existing) {
+      existing.addEventListener('load', () => window.kakao?.maps?.load(drawMap), { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.dataset.kakaoMap = 'true';
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false`;
+    script.async = true;
+    script.onload = () => window.kakao?.maps?.load(drawMap);
+    script.onerror = () => setStatus('error');
+    document.head.appendChild(script);
+  }, [containerRef, candidates]);
+
+  return status;
+}
+
 export default function Finder() {
   const [company, setCompany] = useState('서울 강남구 논현동 105-7');
   const [maxCommute, setMaxCommute] = useState(60);
@@ -51,6 +123,7 @@ export default function Finder() {
   const [maxPrice, setMaxPrice] = useState(25);
   const [query, setQuery] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const mapRef = useRef<HTMLDivElement | null>(null);
 
   const candidates = useMemo(() => {
     return baseCandidates
@@ -62,6 +135,7 @@ export default function Finder() {
 
   const activeCandidates = submitted ? candidates : baseCandidates;
   const top = activeCandidates[0];
+  const mapStatus = useKakaoMap(mapRef, activeCandidates);
 
   return (
     <main className="shell">
@@ -69,7 +143,7 @@ export default function Finder() {
         <div className="hero-copy">
           <span className="eyebrow">Property Map GPT · Decision Dashboard</span>
           <h1 className="title">우리 가족 조건에 맞는<br />이사 후보지를 먼저 좁힙니다</h1>
-          <p className="desc">회사 주소, 셔틀 탑승지, 매매가 범위, 출근시간을 동시에 반영해 후보 단지를 점수화합니다. 현재는 API 연결 전 MVP이며, 화면 구조와 판단 흐름을 먼저 검증하는 단계입니다.</p>
+          <p className="desc">회사 주소, 셔틀 탑승지, 매매가 범위, 출근시간을 동시에 반영해 후보 단지를 점수화합니다. 현재는 Kakao Map 연결 단계이며, 다음 순서로 주소검색·ODsay·국토부 실거래가를 연결합니다.</p>
           <div className="row compact">
             <span className="pill dark">논현 {maxCommute}분</span>
             <span className="pill">셔틀 도보권</span>
@@ -103,19 +177,28 @@ export default function Finder() {
         <div className="map-card">
           <div className="section-head">
             <span>02</span>
-            <h2>입지 시뮬레이션</h2>
+            <h2>입지 지도</h2>
           </div>
-          <div className="map-visual" aria-label="지도 시각화 placeholder">
-            <div className="ring r1" />
-            <div className="ring r2" />
-            <div className="ring r3" />
-            <div className="pin company">논현</div>
-            <div className="pin p1">잠실</div>
-            <div className="pin p2">과천</div>
-            <div className="pin p3">분당</div>
-            <div className="route-line" />
+          <div ref={mapRef} className={`map-visual ${mapStatus === 'ready' ? 'kakao-live' : ''}`} aria-label="Kakao Map">
+            {mapStatus !== 'ready' && (
+              <div className="map-fallback">
+                <div className="ring r1" />
+                <div className="ring r2" />
+                <div className="ring r3" />
+                <div className="pin company">논현</div>
+                <div className="pin p1">잠실</div>
+                <div className="pin p2">과천</div>
+                <div className="pin p3">분당</div>
+                <div className="route-line" />
+              </div>
+            )}
           </div>
-          <div className="map-note">지도 SDK 연결 전 임시 시각화입니다. 다음 단계에서 Kakao Map 마커와 셔틀 반경 레이어를 붙입니다.</div>
+          <div className="map-note">
+            {mapStatus === 'ready' && 'Kakao Map 연결 완료. 후보 단지와 논현 목적지 마커를 표시합니다.'}
+            {mapStatus === 'missing-key' && 'Kakao Map JavaScript Key가 감지되지 않았습니다. Vercel 환경변수 NEXT_PUBLIC_KAKAO_MAP_APP_KEY를 확인하세요.'}
+            {mapStatus === 'error' && 'Kakao Map 로드에 실패했습니다. Kakao Developers의 Web 플랫폼 도메인 등록을 확인하세요.'}
+            {mapStatus === 'loading' && 'Kakao Map을 불러오는 중입니다.'}
+          </div>
         </div>
       </section>
 
