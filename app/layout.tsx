@@ -1,4 +1,5 @@
 import './globals.css';
+import './investment.css';
 
 export const metadata = {
   title: 'Property Map GPT',
