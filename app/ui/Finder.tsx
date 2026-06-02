@@ -51,6 +51,15 @@ type CommuteResult = {
   routeSummary?: string | null;
 };
 
+type AreaDeal = {
+  label: string;
+  exclusiveArea: string;
+  latestPrice: number;
+  latestDate: string;
+  range: string;
+  count: number;
+};
+
 const DEFAULT_COMPANY: CompanyAnchor = {
   name: '남편 회사',
   address: '서울 강남구 논현동 105-7',
@@ -74,6 +83,40 @@ function recalc(c: Candidate, maxPrice: number, maxCommute: number): Candidate {
   if (c.shuttle <= 7) score += 3;
   const final = Math.max(0, Math.min(100, score));
   return { ...c, score: final, grade: final >= 85 ? 'A' : final >= 75 ? 'B' : final >= 65 ? 'C' : 'D' };
+}
+
+function getMockAreaDeals(placeName: string): AreaDeal[] {
+  if (placeName.includes('엘스')) {
+    return [
+      { label: '33평', exclusiveArea: '84.8㎡', latestPrice: 24.7, latestDate: '2026-05', range: '23.8~25.4억', count: 8 },
+      { label: '25평', exclusiveArea: '59.9㎡', latestPrice: 20.2, latestDate: '2026-04', range: '19.4~21.0억', count: 11 },
+      { label: '18평', exclusiveArea: '45.0㎡', latestPrice: 16.8, latestDate: '2026-03', range: '16.2~17.1억', count: 4 },
+    ];
+  }
+
+  if (placeName.includes('프레스티어') || placeName.includes('과천')) {
+    return [
+      { label: '34평', exclusiveArea: '84.9㎡', latestPrice: 24.8, latestDate: '입주예정', range: '24.0~26.0억', count: 0 },
+      { label: '30평', exclusiveArea: '74.9㎡', latestPrice: 22.4, latestDate: '입주예정', range: '21.5~23.5억', count: 0 },
+      { label: '25평', exclusiveArea: '59.9㎡', latestPrice: 18.9, latestDate: '입주예정', range: '18.0~20.5억', count: 0 },
+    ];
+  }
+
+  return [
+    { label: '30평', exclusiveArea: '84.9㎡', latestPrice: 22.8, latestDate: '2026-05', range: '21.8~24.0억', count: 6 },
+    { label: '26평', exclusiveArea: '72.0㎡', latestPrice: 20.4, latestDate: '2026-04', range: '19.5~21.2억', count: 5 },
+    { label: '18평', exclusiveArea: '59.9㎡', latestPrice: 17.6, latestDate: '2026-03', range: '16.8~18.3억', count: 4 },
+  ];
+}
+
+function getInvestmentSignal(placeName: string) {
+  if (placeName.includes('엘스')) {
+    return { grade: 'A-', summary: '대단지 거래량과 잠실 생활권 수요가 강점입니다. 단, 가격 레벨이 높아 진입가 관리가 중요합니다.', momentum: 78, liquidity: 86, budget: 74 };
+  }
+  if (placeName.includes('프레스티어') || placeName.includes('과천')) {
+    return { grade: 'B+', summary: '과천 신축 희소성과 정비사업 기대감은 강점입니다. 입주 전 가격 선반영 여부를 별도 점검해야 합니다.', momentum: 82, liquidity: 55, budget: 68 };
+  }
+  return { grade: 'B', summary: '입지와 상품성은 확인되지만, 실거래량·상승률·예산 적합성은 실제 국토부 데이터 연결 후 재판단이 필요합니다.', momentum: 64, liquidity: 60, budget: 70 };
 }
 
 function Bar({ label, value }: { label: string; value: number }) {
@@ -211,6 +254,9 @@ export default function Finder() {
   const activeCandidates = submitted ? candidates : baseCandidates;
   const top = selectedPlace ? { name: selectedPlace.placeName, grade: '선택', score: '', type: selectedPlace.categoryName || selectedPlace.addressName } : activeCandidates[0];
   const mapStatus = useKakaoMap(mapRef, activeCandidates, selectedPlace, companyAnchor);
+  const areaDeals = selectedPlace ? getMockAreaDeals(selectedPlace.placeName) : [];
+  const investment = selectedPlace ? getInvestmentSignal(selectedPlace.placeName) : null;
+  const budgetRows = areaDeals.map((row) => ({ ...row, withinBudget: row.latestPrice >= minPrice && row.latestPrice <= maxPrice }));
 
   async function geocodeCompany() {
     const res = await fetch('/api/kakao/address', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: company }) });
@@ -218,8 +264,17 @@ export default function Finder() {
     if (data.result) {
       setCompanyAnchor({ name: '남편 회사', address: data.result.roadAddressName || data.result.addressName || company, lat: data.result.lat, lng: data.result.lng });
       setCommute(null);
-      setCommuteState('회사 위치가 갱신되었습니다. 선택 단지 기준 출근시간을 다시 계산하세요.');
+      setCommuteState('회사 위치가 갱신되었습니다. 선택 단지가 있으면 출근시간을 자동 재계산합니다.');
     }
+  }
+
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    setPlaces([]);
+    setSelectedPlace(null);
+    setSearchState('');
+    setCommute(null);
+    setCommuteState('');
   }
 
   async function searchPlaces() {
@@ -237,17 +292,13 @@ export default function Finder() {
   function selectPlace(p: PlaceResult) {
     setSelectedPlace(p);
     setCommute(null);
-    setCommuteState('선택 단지 기준으로 출근시간을 계산할 수 있습니다.');
+    setCommuteState('선택 단지 기준으로 출근시간을 자동 계산 중입니다.');
     setSearchState('선택 완료. 선택한 대상 기준으로 지도 마커를 갱신했습니다.');
     setSubmitted(true);
   }
 
   async function calculateCommute() {
-    if (!selectedPlace) {
-      setCommuteState('먼저 분석할 단지를 선택하세요.');
-      return;
-    }
-
+    if (!selectedPlace) return;
     setCommuteState('ODsay 기준 대중교통 경로를 계산 중입니다.');
     setCommute(null);
 
@@ -271,10 +322,18 @@ export default function Finder() {
     setCommuteState(data.fallback ? 'ODsay 응답 실패로 임시 추정값을 표시합니다.' : 'ODsay 기준 대중교통 경로 계산 완료.');
   }
 
+  useEffect(() => {
+    if (!selectedPlace) return;
+    const timer = window.setTimeout(() => {
+      calculateCommute();
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [selectedPlace?.id, companyAnchor.lat, companyAnchor.lng]);
+
   return <main className="shell">
-    <section className="hero-v2"><div className="hero-copy"><span className="eyebrow">Property Map GPT · Decision Dashboard</span><h1 className="title">우리 가족 조건에 맞는<br />이사 후보지를 먼저 좁힙니다</h1><p className="desc">단지명 검색 결과는 사용자가 직접 선택하고, 선택 단지에서 남편 회사까지의 대중교통 소요시간을 ODsay 기준으로 계산합니다.</p><div className="row compact"><span className="pill dark">논현 {maxCommute}분</span><span className="pill">선택형 단지 검색</span><span className="pill">{minPrice}~{maxPrice}억</span></div></div><aside className="hero-panel"><div className="panel-label">현재 분석 대상</div><strong>{top?.name ?? '후보 없음'}</strong><div className="hero-score">{String(top?.grade ?? '-')} {String(top?.score ?? '')}</div><p>{commute?.totalTimeMinutes ? `남편 회사까지 ${commute.totalTimeMinutes}분` : top?.type ?? '조건을 입력하면 후보를 재정렬합니다.'}</p></aside></section>
-    <section className="workspace"><div className="control-card"><div className="section-head"><span>01</span><h2>조건 입력</h2></div><label>회사 주소<input className="input" value={company} onChange={(e) => setCompany(e.target.value)} /></label><button className="button secondary" onClick={geocodeCompany}>회사 위치 갱신</button><label>단지명/지역 검색<input className="input" placeholder="예: 더샵스타리버, 프레스티어자이, 잠실" value={query} onChange={(e) => setQuery(e.target.value)} /></label><button className="button secondary" onClick={searchPlaces}>카카오에서 단지 검색</button>{searchState && <p className="search-state">{searchState}</p>}{places.length > 0 && <div className="place-list">{places.map((p) => <button key={p.id} className={`place-item ${selectedPlace?.id === p.id ? 'selected' : ''}`} onClick={() => selectPlace(p)}><b>{p.placeName}</b><span>{p.categoryName || '분류 없음'}</span><small>{p.roadAddressName || p.addressName}</small></button>)}</div>}<div className="two-col"><label>출근 허용시간<input className="input" type="number" value={maxCommute} onChange={(e) => setMaxCommute(Number(e.target.value))} /></label><label>최대 매매가, 억<input className="input" type="number" value={maxPrice} onChange={(e) => setMaxPrice(Number(e.target.value))} /></label></div><label>최소 매매가, 억<input className="input" type="number" value={minPrice} onChange={(e) => setMinPrice(Number(e.target.value))} /></label><button className="button" onClick={() => setSubmitted(true)}>후보 추천 실행</button></div>
+    <section className="hero-v2"><div className="hero-copy"><span className="eyebrow">Property Map GPT · Decision Dashboard</span><h1 className="title">우리 가족 조건에 맞는<br />이사 후보지를 먼저 좁힙니다</h1><p className="desc">단지명 검색 결과는 사용자가 직접 선택하고, 선택 즉시 회사까지의 대중교통 소요시간과 투자 판단 보조 지표를 표시합니다.</p><div className="row compact"><span className="pill dark">논현 {maxCommute}분</span><span className="pill">자동 통근 계산</span><span className="pill">{minPrice}~{maxPrice}억</span></div></div><aside className="hero-panel"><div className="panel-label">현재 분석 대상</div><strong>{top?.name ?? '후보 없음'}</strong><div className="hero-score">{String(top?.grade ?? '-')} {String(top?.score ?? '')}</div><p>{commute?.totalTimeMinutes ? `남편 회사까지 ${commute.totalTimeMinutes}분` : top?.type ?? '조건을 입력하면 후보를 재정렬합니다.'}</p></aside></section>
+    <section className="workspace"><div className="control-card"><div className="section-head"><span>01</span><h2>조건 입력</h2></div><label>회사 주소<input className="input" value={company} onChange={(e) => setCompany(e.target.value)} /></label><button className="button secondary" onClick={geocodeCompany}>회사 위치 갱신</button><label>단지명/지역 검색<input className="input" placeholder="예: 더샵스타리버, 프레스티어자이, 잠실 엘스" value={query} onChange={(e) => handleQueryChange(e.target.value)} /></label><button className="button secondary" onClick={searchPlaces}>카카오에서 단지 검색</button>{searchState && <p className="search-state">{searchState}</p>}{places.length > 0 && <div className="place-list">{places.map((p) => <button key={p.id} className={`place-item ${selectedPlace?.id === p.id ? 'selected' : ''}`} onClick={() => selectPlace(p)}><b>{p.placeName}</b><span>{p.categoryName || '분류 없음'}</span><small>{p.roadAddressName || p.addressName}</small></button>)}</div>}<div className="two-col"><label>출근 허용시간<input className="input" type="number" value={maxCommute} onChange={(e) => setMaxCommute(Number(e.target.value))} /></label><label>최대 매매가, 억<input className="input" type="number" value={maxPrice} onChange={(e) => setMaxPrice(Number(e.target.value))} /></label></div><label>최소 매매가, 억<input className="input" type="number" value={minPrice} onChange={(e) => setMinPrice(Number(e.target.value))} /></label><button className="button" onClick={() => setSubmitted(true)}>후보 추천 실행</button></div>
       <div className="map-card"><div className="section-head"><span>02</span><h2>입지 지도</h2></div><div ref={mapRef} className={`map-visual ${mapStatus === 'ready' ? 'kakao-live' : ''}`} aria-label="Kakao Map">{mapStatus !== 'ready' && <FallbackMap selectedPlace={selectedPlace} />}</div><div className="map-note">{mapStatus === 'ready' && (selectedPlace ? 'Kakao Map 연결 완료. 선택 단지와 회사 목적지만 표시합니다.' : 'Kakao Map 연결 완료. 후보 단지와 회사 목적지 마커를 표시합니다.')}{mapStatus === 'missing-key' && 'Kakao Map JavaScript Key가 감지되지 않았습니다.'}{mapStatus === 'error' && 'Kakao Map 로드에 실패했습니다.'}{mapStatus === 'loading' && 'Kakao Map을 불러오는 중입니다.'}</div>{selectedPlace && <div className="map-note"><b>선택 단지</b><br />{selectedPlace.placeName}<br />{selectedPlace.roadAddressName || selectedPlace.addressName}</div>}</div></section>
-    <section className="result-v2"><div className="section-head wide"><span>03</span><div><h2>{selectedPlace ? '선택 단지 통근 분석' : '추천 후보 ' + activeCandidates.length + '개'}</h2><p>{selectedPlace ? '선택한 단지에서 회사까지 대중교통 이동시간을 계산합니다.' : '점수는 출근성, 셔틀 접근성, 가격 적합성, 상승률, 거래량, 리스크를 종합한 임시 모델입니다.'}</p></div></div>{selectedPlace && <article className="commute-card"><div><b>{selectedPlace.placeName}</b><span>{selectedPlace.roadAddressName || selectedPlace.addressName}</span></div><button className="button commute-button" onClick={calculateCommute}>회사까지 출근시간 계산</button>{commuteState && <p className="search-state">{commuteState}</p>}{commute && <div className="commute-grid"><div><strong>{commute.totalTimeMinutes ?? '-'}분</strong><span>총 소요시간</span></div><div><strong>{commute.transferCount ?? '-'}회</strong><span>환승</span></div><div><strong>{commute.totalWalkMeters ?? '-'}m</strong><span>도보거리</span></div><div><strong>{commute.paymentKrw ? `${commute.paymentKrw.toLocaleString()}원` : '-'}</strong><span>요금</span></div></div>}{commute?.routeSummary && <p className="risk"><b>경로 요약</b> {commute.routeSummary}</p>}</article>}<div className="candidate-grid">{activeCandidates.map((c) => <article className="candidate-card" key={c.name}><div className="candidate-top"><span className={`badge grade-${c.grade}`}>{c.grade} {c.score}점</span><span className="type">{c.type}</span></div><h3>{c.name}</h3><p className="meta">{c.region}</p><div className="metric-row"><b>{c.commute}분</b><span>논현 출근</span><b>{c.shuttle}분</b><span>셔틀 도보</span><b>{c.price}억</b><span>최근가</span></div><Bar label="출근성" value={100 - Math.max(0, c.commute - 35) * 2} /><Bar label="셔틀" value={100 - c.shuttle * 6} /><Bar label="투자 흐름" value={Math.min(100, 55 + c.growth * 3)} /><p className="reason"><b>추천 이유</b><br />{c.reason}</p><p className="risk"><b>주의</b> {c.risk}</p></article>)}</div></section>
+    <section className="result-v2"><div className="section-head wide"><span>03</span><div><h2>{selectedPlace ? '선택 단지 통근·투자 분석' : '추천 후보 ' + activeCandidates.length + '개'}</h2><p>{selectedPlace ? '선택 즉시 통근시간을 계산하고, 예산 내 진입 가능한 평형과 투자 판단 보조 지표를 함께 보여줍니다.' : '점수는 출근성, 셔틀 접근성, 가격 적합성, 상승률, 거래량, 리스크를 종합한 임시 모델입니다.'}</p></div></div>{selectedPlace && <article className="commute-card"><div><b>{selectedPlace.placeName}</b><span>{selectedPlace.roadAddressName || selectedPlace.addressName}</span></div>{commuteState && <p className="search-state">{commuteState}</p>}{commute && <div className="commute-grid"><div><strong>{commute.totalTimeMinutes ?? '-'}분</strong><span>총 소요시간</span></div><div><strong>{commute.transferCount ?? '-'}회</strong><span>환승</span></div><div><strong>{commute.totalWalkMeters ?? '-'}m</strong><span>도보거리</span></div><div><strong>{commute.paymentKrw ? `${commute.paymentKrw.toLocaleString()}원` : '-'}</strong><span>요금</span></div></div>}{commute?.routeSummary && <p className="risk"><b>경로 요약</b> {commute.routeSummary}</p>}</article>}{selectedPlace && investment && <section className="investment-grid"><article className="investment-card"><div className="candidate-top"><span className="badge grade-B">투자성 {investment.grade}</span><span className="type">판단 보조 지표</span></div><p className="reason">{investment.summary}</p><Bar label="상승 흐름" value={investment.momentum} /><Bar label="거래 유동성" value={investment.liquidity} /><Bar label="예산 적합" value={investment.budget} /><p className="risk">미래 가격 상승을 보장하는 예측이 아니라, 실거래 추세·거래량·예산 적합성을 종합해 볼 수 있는 판단 보조 영역입니다.</p></article><article className="investment-card"><h3>예산 내 평형 가능성</h3><div className="deal-table"><div className="deal-head"><span>평형</span><span>최근 실거래</span><span>예산</span></div>{budgetRows.map((row) => <div className="deal-row" key={row.label}><span>{row.label} <small>{row.exclusiveArea}</small></span><span><b>{row.latestPrice.toFixed(1)}억</b><small>{row.latestDate} · {row.range} ({row.count}건)</small></span><span className={row.withinBudget ? 'fit-ok' : 'fit-no'}>{row.withinBudget ? '가능' : '초과'}</span></div>)}</div><p className="risk">현재 값은 화면 구조 검증용 임시 데이터입니다. 다음 단계에서 국토부 실거래가 API로 실제 평형별 거래가를 대체합니다.</p></article></section>}<div className="candidate-grid">{activeCandidates.map((c) => <article className="candidate-card" key={c.name}><div className="candidate-top"><span className={`badge grade-${c.grade}`}>{c.grade} {c.score}점</span><span className="type">{c.type}</span></div><h3>{c.name}</h3><p className="meta">{c.region}</p><div className="metric-row"><b>{c.commute}분</b><span>논현 출근</span><b>{c.shuttle}분</b><span>셔틀 도보</span><b>{c.price}억</b><span>최근가</span></div><Bar label="출근성" value={100 - Math.max(0, c.commute - 35) * 2} /><Bar label="셔틀" value={100 - c.shuttle * 6} /><Bar label="투자 흐름" value={Math.min(100, 55 + c.growth * 3)} /><p className="reason"><b>추천 이유</b><br />{c.reason}</p><p className="risk"><b>주의</b> {c.risk}</p></article>)}</div></section>
   </main>;
 }
