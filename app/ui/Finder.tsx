@@ -41,6 +41,16 @@ type CompanyAnchor = {
   lng: number;
 };
 
+type CommuteResult = {
+  fallback?: boolean;
+  provider?: string;
+  totalTimeMinutes?: number | null;
+  transferCount?: number | null;
+  totalWalkMeters?: number | null;
+  paymentKrw?: number | null;
+  routeSummary?: string | null;
+};
+
 const DEFAULT_COMPANY: CompanyAnchor = {
   name: '남편 회사',
   address: '서울 강남구 논현동 105-7',
@@ -188,6 +198,8 @@ export default function Finder() {
   const [places, setPlaces] = useState<PlaceResult[]>([]);
   const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
   const [searchState, setSearchState] = useState('');
+  const [commute, setCommute] = useState<CommuteResult | null>(null);
+  const [commuteState, setCommuteState] = useState('');
   const mapRef = useRef<HTMLDivElement | null>(null);
 
   const candidates = useMemo(() => baseCandidates
@@ -205,6 +217,8 @@ export default function Finder() {
     const data = await res.json();
     if (data.result) {
       setCompanyAnchor({ name: '남편 회사', address: data.result.roadAddressName || data.result.addressName || company, lat: data.result.lat, lng: data.result.lng });
+      setCommute(null);
+      setCommuteState('회사 위치가 갱신되었습니다. 선택 단지 기준 출근시간을 다시 계산하세요.');
     }
   }
 
@@ -212,6 +226,8 @@ export default function Finder() {
     if (!query.trim()) { setSearchState('검색어를 입력하세요.'); return; }
     setSearchState('검색 중');
     setSelectedPlace(null);
+    setCommute(null);
+    setCommuteState('');
     const res = await fetch('/api/kakao/keyword', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) });
     const data = await res.json();
     setPlaces(data.results ?? []);
@@ -220,14 +236,45 @@ export default function Finder() {
 
   function selectPlace(p: PlaceResult) {
     setSelectedPlace(p);
+    setCommute(null);
+    setCommuteState('선택 단지 기준으로 출근시간을 계산할 수 있습니다.');
     setSearchState('선택 완료. 선택한 대상 기준으로 지도 마커를 갱신했습니다.');
     setSubmitted(true);
   }
 
+  async function calculateCommute() {
+    if (!selectedPlace) {
+      setCommuteState('먼저 분석할 단지를 선택하세요.');
+      return;
+    }
+
+    setCommuteState('ODsay 기준 대중교통 경로를 계산 중입니다.');
+    setCommute(null);
+
+    const response = await fetch('/api/transit/route', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        origin: { lat: selectedPlace.lat, lng: selectedPlace.lng },
+        destination: { lat: companyAnchor.lat, lng: companyAnchor.lng },
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      setCommuteState(data.error || '출근시간 계산에 실패했습니다.');
+      return;
+    }
+
+    setCommute(data);
+    setCommuteState(data.fallback ? 'ODsay 응답 실패로 임시 추정값을 표시합니다.' : 'ODsay 기준 대중교통 경로 계산 완료.');
+  }
+
   return <main className="shell">
-    <section className="hero-v2"><div className="hero-copy"><span className="eyebrow">Property Map GPT · Decision Dashboard</span><h1 className="title">우리 가족 조건에 맞는<br />이사 후보지를 먼저 좁힙니다</h1><p className="desc">단지명 검색 결과는 사용자가 직접 선택하고, 선택 후에는 회사 목적지와 선택 단지만 지도에 표시합니다.</p><div className="row compact"><span className="pill dark">논현 {maxCommute}분</span><span className="pill">선택형 단지 검색</span><span className="pill">{minPrice}~{maxPrice}억</span></div></div><aside className="hero-panel"><div className="panel-label">현재 분석 대상</div><strong>{top?.name ?? '후보 없음'}</strong><div className="hero-score">{String(top?.grade ?? '-')} {String(top?.score ?? '')}</div><p>{top?.type ?? '조건을 입력하면 후보를 재정렬합니다.'}</p></aside></section>
+    <section className="hero-v2"><div className="hero-copy"><span className="eyebrow">Property Map GPT · Decision Dashboard</span><h1 className="title">우리 가족 조건에 맞는<br />이사 후보지를 먼저 좁힙니다</h1><p className="desc">단지명 검색 결과는 사용자가 직접 선택하고, 선택 단지에서 남편 회사까지의 대중교통 소요시간을 ODsay 기준으로 계산합니다.</p><div className="row compact"><span className="pill dark">논현 {maxCommute}분</span><span className="pill">선택형 단지 검색</span><span className="pill">{minPrice}~{maxPrice}억</span></div></div><aside className="hero-panel"><div className="panel-label">현재 분석 대상</div><strong>{top?.name ?? '후보 없음'}</strong><div className="hero-score">{String(top?.grade ?? '-')} {String(top?.score ?? '')}</div><p>{commute?.totalTimeMinutes ? `남편 회사까지 ${commute.totalTimeMinutes}분` : top?.type ?? '조건을 입력하면 후보를 재정렬합니다.'}</p></aside></section>
     <section className="workspace"><div className="control-card"><div className="section-head"><span>01</span><h2>조건 입력</h2></div><label>회사 주소<input className="input" value={company} onChange={(e) => setCompany(e.target.value)} /></label><button className="button secondary" onClick={geocodeCompany}>회사 위치 갱신</button><label>단지명/지역 검색<input className="input" placeholder="예: 더샵스타리버, 프레스티어자이, 잠실" value={query} onChange={(e) => setQuery(e.target.value)} /></label><button className="button secondary" onClick={searchPlaces}>카카오에서 단지 검색</button>{searchState && <p className="search-state">{searchState}</p>}{places.length > 0 && <div className="place-list">{places.map((p) => <button key={p.id} className={`place-item ${selectedPlace?.id === p.id ? 'selected' : ''}`} onClick={() => selectPlace(p)}><b>{p.placeName}</b><span>{p.categoryName || '분류 없음'}</span><small>{p.roadAddressName || p.addressName}</small></button>)}</div>}<div className="two-col"><label>출근 허용시간<input className="input" type="number" value={maxCommute} onChange={(e) => setMaxCommute(Number(e.target.value))} /></label><label>최대 매매가, 억<input className="input" type="number" value={maxPrice} onChange={(e) => setMaxPrice(Number(e.target.value))} /></label></div><label>최소 매매가, 억<input className="input" type="number" value={minPrice} onChange={(e) => setMinPrice(Number(e.target.value))} /></label><button className="button" onClick={() => setSubmitted(true)}>후보 추천 실행</button></div>
       <div className="map-card"><div className="section-head"><span>02</span><h2>입지 지도</h2></div><div ref={mapRef} className={`map-visual ${mapStatus === 'ready' ? 'kakao-live' : ''}`} aria-label="Kakao Map">{mapStatus !== 'ready' && <FallbackMap selectedPlace={selectedPlace} />}</div><div className="map-note">{mapStatus === 'ready' && (selectedPlace ? 'Kakao Map 연결 완료. 선택 단지와 회사 목적지만 표시합니다.' : 'Kakao Map 연결 완료. 후보 단지와 회사 목적지 마커를 표시합니다.')}{mapStatus === 'missing-key' && 'Kakao Map JavaScript Key가 감지되지 않았습니다.'}{mapStatus === 'error' && 'Kakao Map 로드에 실패했습니다.'}{mapStatus === 'loading' && 'Kakao Map을 불러오는 중입니다.'}</div>{selectedPlace && <div className="map-note"><b>선택 단지</b><br />{selectedPlace.placeName}<br />{selectedPlace.roadAddressName || selectedPlace.addressName}</div>}</div></section>
-    <section className="result-v2"><div className="section-head wide"><span>03</span><div><h2>{selectedPlace ? '선택 단지 분석 준비' : '추천 후보 ' + activeCandidates.length + '개'}</h2><p>{selectedPlace ? '다음 단계에서 선택 단지 기준 ODsay 출근시간과 국토부 실거래가를 연결합니다.' : '점수는 출근성, 셔틀 접근성, 가격 적합성, 상승률, 거래량, 리스크를 종합한 임시 모델입니다.'}</p></div></div><div className="candidate-grid">{activeCandidates.map((c) => <article className="candidate-card" key={c.name}><div className="candidate-top"><span className={`badge grade-${c.grade}`}>{c.grade} {c.score}점</span><span className="type">{c.type}</span></div><h3>{c.name}</h3><p className="meta">{c.region}</p><div className="metric-row"><b>{c.commute}분</b><span>논현 출근</span><b>{c.shuttle}분</b><span>셔틀 도보</span><b>{c.price}억</b><span>최근가</span></div><Bar label="출근성" value={100 - Math.max(0, c.commute - 35) * 2} /><Bar label="셔틀" value={100 - c.shuttle * 6} /><Bar label="투자 흐름" value={Math.min(100, 55 + c.growth * 3)} /><p className="reason"><b>추천 이유</b><br />{c.reason}</p><p className="risk"><b>주의</b> {c.risk}</p></article>)}</div></section>
+    <section className="result-v2"><div className="section-head wide"><span>03</span><div><h2>{selectedPlace ? '선택 단지 통근 분석' : '추천 후보 ' + activeCandidates.length + '개'}</h2><p>{selectedPlace ? '선택한 단지에서 회사까지 대중교통 이동시간을 계산합니다.' : '점수는 출근성, 셔틀 접근성, 가격 적합성, 상승률, 거래량, 리스크를 종합한 임시 모델입니다.'}</p></div></div>{selectedPlace && <article className="commute-card"><div><b>{selectedPlace.placeName}</b><span>{selectedPlace.roadAddressName || selectedPlace.addressName}</span></div><button className="button commute-button" onClick={calculateCommute}>회사까지 출근시간 계산</button>{commuteState && <p className="search-state">{commuteState}</p>}{commute && <div className="commute-grid"><div><strong>{commute.totalTimeMinutes ?? '-'}분</strong><span>총 소요시간</span></div><div><strong>{commute.transferCount ?? '-'}회</strong><span>환승</span></div><div><strong>{commute.totalWalkMeters ?? '-'}m</strong><span>도보거리</span></div><div><strong>{commute.paymentKrw ? `${commute.paymentKrw.toLocaleString()}원` : '-'}</strong><span>요금</span></div></div>}{commute?.routeSummary && <p className="risk"><b>경로 요약</b> {commute.routeSummary}</p>}</article>}<div className="candidate-grid">{activeCandidates.map((c) => <article className="candidate-card" key={c.name}><div className="candidate-top"><span className={`badge grade-${c.grade}`}>{c.grade} {c.score}점</span><span className="type">{c.type}</span></div><h3>{c.name}</h3><p className="meta">{c.region}</p><div className="metric-row"><b>{c.commute}분</b><span>논현 출근</span><b>{c.shuttle}분</b><span>셔틀 도보</span><b>{c.price}억</b><span>최근가</span></div><Bar label="출근성" value={100 - Math.max(0, c.commute - 35) * 2} /><Bar label="셔틀" value={100 - c.shuttle * 6} /><Bar label="투자 흐름" value={Math.min(100, 55 + c.growth * 3)} /><p className="reason"><b>추천 이유</b><br />{c.reason}</p><p className="risk"><b>주의</b> {c.risk}</p></article>)}</div></section>
   </main>;
 }
