@@ -1,17 +1,5 @@
 import { NextResponse } from 'next/server';
 
-type KakaoDocument = {
-  id: string;
-  place_name: string;
-  category_name?: string;
-  address_name?: string;
-  road_address_name?: string;
-  x: string;
-  y: string;
-  place_url?: string;
-  phone?: string;
-};
-
 type PlaceResult = {
   id: string;
   placeName: string;
@@ -21,69 +9,65 @@ type PlaceResult = {
   lat: number;
   lng: number;
   placeUrl: string;
-  phone?: string;
+  phone: string;
 };
 
-function normalize(value: string) {
+function normalize(value: string): string {
   return value.replace(/\s+/g, '').toLowerCase();
 }
 
-function buildQueryVariants(query: string) {
+function makeVariants(query: string): string[] {
   const trimmed = query.trim();
   const compact = trimmed.replace(/\s+/g, '');
-  const variants = [
-    trimmed,
-    compact,
-    `${trimmed} 아파트`,
-    `${compact}아파트`,
-  ];
-  return Array.from(new Set(variants.filter(Boolean)));
+  const variants = [trimmed, compact, `${trimmed} 아파트`, `${compact}아파트`];
+  return variants.filter((item, index) => item && variants.indexOf(item) === index);
 }
 
-function mapDocument(item: KakaoDocument): PlaceResult {
+function toPlaceResult(item: any): PlaceResult {
   return {
-    id: item.id,
-    placeName: item.place_name,
-    categoryName: item.category_name ?? '',
-    addressName: item.address_name ?? '',
-    roadAddressName: item.road_address_name ?? '',
+    id: String(item.id ?? `${item.place_name}-${item.x}-${item.y}`),
+    placeName: String(item.place_name ?? ''),
+    categoryName: String(item.category_name ?? ''),
+    addressName: String(item.address_name ?? ''),
+    roadAddressName: String(item.road_address_name ?? ''),
     lat: Number(item.y),
     lng: Number(item.x),
-    placeUrl: item.place_url ?? '',
-    phone: item.phone ?? '',
+    placeUrl: String(item.place_url ?? ''),
+    phone: String(item.phone ?? ''),
   };
 }
 
-function rankResults(results: PlaceResult[], originalQuery: string) {
-  const normalizedQuery = normalize(originalQuery);
-  const unique = new Map<string, PlaceResult>();
+function dedupeAndSort(results: PlaceResult[], query: string): PlaceResult[] {
+  const deduped: PlaceResult[] = [];
+  const seen = new Set<string>();
+  const q = normalize(query);
 
-  results.forEach((result) => {
-    const key = result.id || `${result.placeName}:${result.lat}:${result.lng}`;
-    if (!unique.has(key)) unique.set(key, result);
+  results.forEach((item) => {
+    const key = item.id || `${item.placeName}-${item.lat}-${item.lng}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(item);
+    }
   });
 
-  return Array.from(unique.values()).sort((a, b) => {
+  return deduped.sort((a, b) => {
     const aName = normalize(a.placeName);
     const bName = normalize(b.placeName);
-    const aExact = aName.includes(normalizedQuery) ? 1 : 0;
-    const bExact = bName.includes(normalizedQuery) ? 1 : 0;
-    if (aExact !== bExact) return bExact - aExact;
+    const aMatch = aName.includes(q) ? 1 : 0;
+    const bMatch = bName.includes(q) ? 1 : 0;
+    if (aMatch !== bMatch) return bMatch - aMatch;
 
     const aApt = a.categoryName.includes('아파트') ? 1 : 0;
     const bApt = b.categoryName.includes('아파트') ? 1 : 0;
-    if (aApt !== bApt) return bApt - aApt;
-
-    return a.placeName.localeCompare(b.placeName, 'ko');
+    return bApt - aApt;
   });
 }
 
-async function kakaoKeywordSearch(apiKey: string, query: string) {
-  const params = new URLSearchParams({
-    query,
-    size: '10',
-    sort: 'accuracy',
-  });
+async function requestKakao(apiKey: string, keyword: string): Promise<PlaceResult[]> {
+  const params = new URLSearchParams();
+  params.set('query', keyword);
+  params.set('size', '10');
+  params.set('sort', 'accuracy');
 
   const response = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?${params.toString()}`, {
     headers: { Authorization: `KakaoAK ${apiKey}` },
@@ -93,40 +77,41 @@ async function kakaoKeywordSearch(apiKey: string, query: string) {
   if (!response.ok) return [];
 
   const data = await response.json();
-  return (data.documents ?? []).map(mapDocument);
+  const documents = Array.isArray(data.documents) ? data.documents : [];
+  return documents.map(toPlaceResult);
 }
 
 export async function POST(request: Request) {
   try {
-    const { query } = await request.json();
+    const body = await request.json();
+    const query = typeof body.query === 'string' ? body.query.trim() : '';
 
-    if (!query || typeof query !== 'string') {
-      return NextResponse.json({ success: false, error: '검색어가 필요합니다.' }, { status: 400 });
+    if (!query) {
+      return NextResponse.json({ success: false, error: '검색어가 필요합니다.', results: [] }, { status: 400 });
     }
 
     const apiKey = process.env.KAKAO_REST_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ success: true, fallback: true, results: [], message: 'KAKAO_REST_API_KEY가 없어 검색 결과를 반환하지 않습니다.' });
+      return NextResponse.json({ success: true, fallback: false, results: [], message: 'KAKAO_REST_API_KEY is missing.' });
     }
 
-    const variants = buildQueryVariants(query);
+    const variants = makeVariants(query);
     const allResults: PlaceResult[] = [];
 
     for (const variant of variants) {
-      const results = await kakaoKeywordSearch(apiKey, variant);
+      const results = await requestKakao(apiKey, variant);
       allResults.push(...results);
-      const hasDirectMatch = results.some((item) => normalize(item.placeName).includes(normalize(query)));
-      if (hasDirectMatch) break;
-    }
 
-    const ranked = rankResults(allResults, query);
+      const directMatch = results.some((item) => normalize(item.placeName).includes(normalize(query)));
+      if (directMatch) break;
+    }
 
     return NextResponse.json({
       success: true,
       fallback: false,
       query,
       variantsTried: variants,
-      results: ranked,
+      results: dedupeAndSort(allResults, query),
     });
   } catch (error) {
     return NextResponse.json({
