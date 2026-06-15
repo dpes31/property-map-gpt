@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>이사계획 세후 예산 판단 대시보드 v20</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+  <style>
+    :root { color-scheme: light; }
+    body { font-family: 'Pretendard', system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="range"] { accent-color: #2563eb; }
+    details > summary { list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    .num { font-variant-numeric: tabular-nums; }
+    .soft-grid { background-image: radial-gradient(circle at 1px 1px, rgba(15,23,42,.08) 1px, transparent 0); background-size: 18px 18px; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen">
+  <main class="max-w-6xl mx-auto px-4 py-5 md:py-8">
+    <header class="mb-5 rounded-[2rem] bg-slate-950 text-white p-5 md:p-8 shadow-xl overflow-hidden relative">
+      <div class="absolute inset-0 soft-grid opacity-30"></div>
+      <div class="relative">
+        <p class="text-xs md:text-sm text-blue-200 font-semibold mb-2">MOVE BUDGET CHECKER · v20</p>
+        <h1 class="text-2xl md:text-4xl font-black tracking-tight">이사계획 세후 예산 판단 대시보드</h1>
+      </div>
+    </header>
+
+    <!-- 0. 핵심 결과 -->
+    <section class="mb-5 rounded-[2rem] bg-white border border-slate-200 shadow-sm overflow-hidden">
+      <div class="p-4 md:p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+        <div>
+          <h2 class="text-xl md:text-2xl font-black">핵심 결과</h2>
+          <p class="text-sm text-slate-500 mt-1">예시 자산 기준입니다. 계약 전 세무·대출 확인 필요.</p>
+        </div>
+      </div>
+
+      <div class="px-4 md:px-6 pt-4 md:pt-5">
+        <div class="rounded-3xl bg-slate-950 text-white p-4 md:p-5 shadow-sm">
+          <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-2 mb-3">
+            <div>
+              
+              <h3 class="text-lg md:text-2xl font-black">만기 전/후 순자금</h3>
+              <p class="text-xs text-slate-400 mt-1">대출 제외 기준. 대출은 매물가 입력 후 반영.</p>
+            </div>
+            <p class="text-xs text-slate-400">단위: 억원</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <article class="rounded-2xl bg-white/5 border border-white/10 p-4 flex items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2 mb-1">
+                  <p class="text-xs font-bold text-blue-200">PLAN A</p>
+                  <span id="topPlanAStatus" class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-black bg-slate-800 text-slate-200">-</span>
+                </div>
+                <h4 class="text-lg md:text-xl font-black">만기 전 이사</h4>
+                <p class="text-xs text-slate-400 mt-1">동탄 보증금 미반영</p>
+              </div>
+              <div class="text-right shrink-0">
+                <p class="text-[11px] font-bold text-slate-400 mb-1">대출 제외 순자금</p>
+                <p class="text-3xl md:text-4xl font-black text-blue-100 num"><span id="topEquity">0.00</span>억</p>
+              </div>
+            </article>
+
+            <article class="rounded-2xl bg-emerald-400/10 border border-emerald-300/20 p-4 flex items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2 mb-1">
+                  <p class="text-xs font-bold text-emerald-200">PLAN B</p>
+                  <span id="topPlanBStatus" class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-black bg-slate-800 text-slate-200">-</span>
+                </div>
+                <h4 class="text-lg md:text-xl font-black">만기 후 이사</h4>
+                <p class="text-xs text-slate-400 mt-1">동탄 보증금 반영</p>
+              </div>
+              <div class="text-right shrink-0">
+                <p class="text-[11px] font-bold text-slate-400 mb-1">대출 제외 순자금</p>
+                <p class="text-3xl md:text-4xl font-black text-emerald-200 num"><span id="topEquityAfterDeposit">0.00</span>억</p>
+              </div>
+            </article>
+          </div>
+
+          <details class="mt-3 rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
+            <summary class="cursor-pointer px-4 py-3 flex items-center justify-between gap-3">
+              <p class="font-black">산출근거</p>
+              <span class="text-xs font-black text-blue-200">산출근거 ▼</span>
+            </summary>
+            <div class="px-4 pb-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div class="rounded-2xl bg-slate-950/60 border border-white/10 p-4">
+                <p class="text-xs font-bold text-blue-200 mb-2">PLAN A · 만기 전 이사</p>
+                <dl class="space-y-2 text-sm">
+                  <div class="flex justify-between gap-4"><dt class="text-slate-400">현재 현금 <span class="font-medium text-slate-500">(전세 잔금 잔액)</span></dt><dd class="font-bold num"><span id="topCurrentCash">0.00</span>억</dd></div>
+                  <div class="flex justify-between gap-4"><dt id="topNNetLabel" class="text-slate-400">녹번 세후 순유입(15억 기준)</dt><dd class="font-bold num"><span id="topNNet">0.00</span>억</dd></div>
+                  <div class="flex justify-between gap-4"><dt id="topUNetLabel" class="text-slate-400">의정부 세후 순유입(4억 기준)</dt><dd class="font-bold num"><span id="topUNet">0.00</span>억</dd></div>
+                  <div class="flex justify-between gap-4"><dt class="text-slate-400">예상 주식 매도액</dt><dd class="font-bold num"><span id="topStock">0.00</span>억</dd></div>
+                  <div class="flex justify-between gap-4 border-t border-white/10 pt-2"><dt class="text-slate-200 font-bold">만기 전 순자금</dt><dd class="font-black text-blue-100 num"><span id="topEquityMirror">0.00</span>억</dd></div>
+                </dl>
+              </div>
+              <div class="rounded-2xl bg-emerald-400/10 border border-emerald-300/20 p-4">
+                <p class="text-xs font-bold text-emerald-200 mb-2">PLAN B · 만기 후 이사</p>
+                <dl class="space-y-2 text-sm">
+                  <div class="flex justify-between gap-4"><dt class="text-slate-400">만기 전 순자금</dt><dd class="font-bold num"><span id="topEquityForPlanB">0.00</span>억</dd></div>
+                  <div class="flex justify-between gap-4"><dt class="text-slate-400">동탄 보증금 사용액</dt><dd class="font-bold num"><span id="topDepositUse">0.00</span>억</dd></div>
+                  <div class="flex justify-between gap-4 border-t border-white/10 pt-2"><dt class="text-slate-200 font-bold">만기 후 순자금</dt><dd class="font-black text-emerald-200 num"><span id="topEquityAfterDepositMini">0.00</span>억</dd></div>
+                </dl>
+                <p class="text-xs text-emerald-100/80 mt-3">계산식: 만기 전 순자금 + 동탄 보증금 사용액 = 만기 후 순자금</p>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3 p-4 md:p-6">
+        <article class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <p class="text-xs font-bold text-slate-500 mb-1">부대비용 포함 총 필요자금</p>
+          <p class="text-2xl font-black num"><span id="cardPurchaseCost">0.00</span>억</p>
+          <p id="cardPurchaseNote" class="text-xs text-slate-500 mt-1 leading-tight"></p>
+        </article>
+        <article class="rounded-2xl bg-blue-50 border border-blue-100 p-4">
+          <p class="text-xs font-bold text-blue-700 mb-1">반영 대출액</p>
+          <p class="text-2xl font-black text-blue-700 num"><span id="cardLoan">0.00</span>억</p>
+          <p id="cardLoanNote" class="text-xs text-blue-700/80 mt-1 leading-tight"></p>
+        </article>
+        <article class="rounded-2xl bg-white border border-slate-200 p-4">
+          <p class="text-xs font-bold text-slate-500 mb-1">플랜 A(만기 전 이사) 잔여/부족</p>
+          <p id="cardPlanA" class="text-2xl font-black num">0.00억</p>
+          <p class="text-xs text-slate-500 mt-1 leading-tight">동탄 보증금 미회수</p>
+        </article>
+        <article class="rounded-2xl bg-white border border-slate-200 p-4">
+          <p class="text-xs font-bold text-slate-500 mb-1">플랜 B(만기 후 이사) 잔여/부족</p>
+          <p id="cardPlanB" class="text-2xl font-black num">0.00억</p>
+          <p class="text-xs text-slate-500 mt-1 leading-tight">동탄 보증금 회수·사용액 반영</p>
+        </article>
+        <article class="rounded-2xl bg-emerald-50 border border-emerald-100 p-4">
+          <p class="text-xs font-bold text-emerald-700 mb-1">세후 산술상 최대 매매가</p>
+          <p class="text-2xl font-black text-emerald-700 num"><span id="cardMaxA">0.00</span>억</p>
+          <p class="text-xs text-emerald-700/80 mt-1 leading-tight">플랜 A(만기 전 이사) 기준 / 현재 비용 조건</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- 1. 자산·매도 세금 설정 -->
+    <section class="mb-5 rounded-[2rem] bg-white border border-slate-200 shadow-sm p-4 md:p-6">
+      <div class="flex items-start gap-3 mb-5">
+        <span class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-black shrink-0">1</span>
+        <div>
+          <h2 class="text-xl font-black">자산·매도세 설정</h2>
+          
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <div class="rounded-2xl bg-emerald-50 border border-emerald-100 p-4">
+          <label class="text-xs font-bold text-emerald-700">현재 보유 현금(전세 잔금 잔액)</label>
+          <div class="mt-1 flex items-center gap-2"><input id="currentCash" type="number" value="1.71" step="0.01" class="w-full rounded-xl border border-emerald-200 px-3 py-2 text-right font-black text-emerald-700 num" /><span class="text-sm text-slate-500">억</span></div>
+        </div>
+        <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <label class="text-xs font-bold text-slate-500">녹번 예상 매도가</label>
+          <div class="mt-1 flex items-center gap-2"><input id="nSell" type="number" value="15.0" step="0.1" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-right font-black num" /><span class="text-sm text-slate-500">억</span></div>
+        </div>
+        <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <label class="text-xs font-bold text-slate-500">녹번 전세보증금</label>
+          <div class="mt-1 flex items-center gap-2"><input id="nJeonse" type="number" value="6.3" step="0.1" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-right font-black text-rose-600 num" /><span class="text-sm text-slate-500">억</span></div>
+        </div>
+        <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <label class="text-xs font-bold text-slate-500">녹번 양도세·지방세</label>
+          <div class="mt-1 flex items-center gap-2"><input id="nCgt" type="number" value="0.31" step="0.01" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-right font-black text-rose-600 num" /><span class="text-sm text-slate-500">억</span></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <label class="text-xs font-bold text-slate-500">의정부 예상 매도가</label>
+          <div class="mt-1 flex items-center gap-2"><input id="uSell" type="number" value="4.0" step="0.1" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-right font-black num" /><span class="text-sm text-slate-500">억</span></div>
+        </div>
+        <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <label class="text-xs font-bold text-slate-500">의정부 임차보증금 차감</label>
+          <div class="mt-1 flex items-center gap-2"><input id="uDeposit" type="number" value="0.03" step="0.01" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-right font-black text-rose-600 num" /><span class="text-sm text-slate-500">억</span></div>
+        </div>
+        <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <label class="text-xs font-bold text-slate-500">의정부 양도세·지방세</label>
+          <div class="mt-1 flex items-center gap-2"><input id="uCgt" type="number" value="0.16" step="0.01" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-right font-black text-rose-600 num" /><span class="text-sm text-slate-500">억</span></div>
+        </div>
+        <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <label class="text-xs font-bold text-slate-500">예상 주식 매도액</label>
+          <div class="mt-1 flex items-center gap-2"><input id="spouseStock" type="number" value="7.0" step="0.1" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-right font-black num" /><span class="text-sm text-slate-500">억</span></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+        <div class="rounded-2xl bg-rose-50 border border-rose-100 p-4">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
+            <div>
+              <p class="font-black text-rose-950">예상 양도세</p>
+              <div id="taxScenarioNote" class="text-xs text-rose-700 mt-1 leading-relaxed space-y-1"></div>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2 text-xs">
+            <button type="button" data-ncgt="0.31" data-ucgt="0.00" class="taxPreset rounded-xl bg-white border border-rose-200 py-2 font-bold text-rose-800">낙관 0.31억</button>
+            <button type="button" data-ncgt="0.31" data-ucgt="0.16" class="taxPreset rounded-xl bg-rose-600 text-white py-2 font-bold">표준 0.47억</button>
+            <button type="button" data-ncgt="0.43" data-ucgt="0.23" class="taxPreset rounded-xl bg-white border border-rose-200 py-2 font-bold text-rose-800">보수 0.66억</button>
+          </div>
+        </div>
+        <div class="rounded-2xl bg-blue-50 border border-blue-100 p-4">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
+            <div>
+              <p class="font-black text-blue-950">예상 주식 매도액</p>
+              <p class="text-xs text-blue-700 mt-1">예상 매도액 선택</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <button type="button" data-stock="5.5" class="stockPreset rounded-xl bg-white border border-blue-200 py-2 font-bold text-blue-800">보수적 5.5억</button>
+            <button type="button" data-stock="7.0" class="stockPreset rounded-xl bg-blue-600 text-white py-2 font-bold">이상적 7.0억</button>
+          </div>
+        </div>
+      </div>
+
+      <details class="rounded-2xl border border-slate-200 bg-slate-50">
+        <summary class="cursor-pointer p-4 flex items-center justify-between font-black text-slate-900">
+          <span>매도 순유입 상세 보기</span>
+          <span class="text-xs font-bold text-slate-500">자동 계산</span>
+        </summary>
+        <div class="p-4 pt-0 overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="text-xs text-slate-500 border-b border-slate-200">
+              <tr><th class="text-left py-2">구분</th><th class="text-right py-2">녹번</th><th class="text-right py-2">의정부</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200">
+              <tr><td class="py-2">매도가</td><td id="tdNSell" class="text-right num"></td><td id="tdUSell" class="text-right num"></td></tr>
+              <tr><td class="py-2">보증금 차감</td><td id="tdNDeposit" class="text-right num text-rose-600"></td><td id="tdUDeposit" class="text-right num text-rose-600"></td></tr>
+              <tr><td class="py-2">매도 중개보수·VAT</td><td id="tdNBroker" class="text-right num text-rose-600"></td><td id="tdUBroker" class="text-right num text-rose-600"></td></tr>
+              <tr><td class="py-2">양도세·지방세</td><td id="tdNCgt" class="text-right num text-rose-600"></td><td id="tdUCgt" class="text-right num text-rose-600"></td></tr>
+              <tr class="font-black"><td class="py-2">세후 순유입</td><td id="tdNNet" class="text-right num"></td><td id="tdUNet" class="text-right num"></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+
+    <!-- 2. 대출·동탄 보증금 설정 -->
+    <section class="mb-5 rounded-[2rem] bg-white border border-slate-200 shadow-sm p-4 md:p-6">
+      <div class="flex items-start gap-3 mb-5">
+        <span class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black shrink-0">2</span>
+        <div>
+          <h2 class="text-xl font-black">대출·동탄 보증금 설정</h2>
+          <p class="text-sm text-slate-500 mt-1">플랜 A(만기 전 이사)는 동탄 보증금 미회수, 플랜 B(만기 후 이사)는 회수 후 사용액 반영입니다.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div class="rounded-2xl bg-blue-50 border border-blue-100 p-4">
+          <label class="text-xs font-bold text-blue-700">대출 반영 방식</label>
+          <select id="loanMode" class="mt-1 w-full rounded-xl border border-blue-200 px-3 py-2 font-bold text-blue-800 bg-white">
+            <option value="auto" selected>매물가 기준 자동 한도</option>
+            <option value="manual">직접 입력</option>
+            <option value="zero">대출 미반영(보수 확인)</option>
+          </select>
+          <p class="text-xs text-blue-700/80 mt-2 leading-relaxed">기본은 자동 한도. 은행 상담값이 있으면 직접 입력.</p>
+        </div>
+        <div id="manualLoanBox" class="hidden rounded-2xl bg-blue-50 border border-blue-100 p-4">
+          <label class="text-xs font-bold text-blue-700">직접 입력 대출 가능액</label>
+          <div class="mt-1 flex items-center gap-2"><input id="manualLoan" type="number" value="4.0" step="0.1" class="w-full rounded-xl border border-blue-200 px-3 py-2 text-right font-black text-blue-700 num" /><span class="text-sm text-slate-500">억</span></div>
+        </div>
+        <div class="rounded-2xl bg-orange-50 border border-orange-100 p-4">
+          <label class="text-xs font-bold text-orange-700">최소 남길 현금</label>
+          <div class="mt-1 flex items-center gap-2"><input id="reserveCash" type="number" value="0.0" step="0.1" class="w-full rounded-xl border border-orange-200 px-3 py-2 text-right font-black text-orange-700 num" /><span class="text-sm text-slate-500">억</span></div>
+          <p class="text-xs text-orange-700/80 mt-2 leading-relaxed">거래 후 남길 예비현금. 0이면 최대 가능액 기준.</p>
+        </div>
+      </div>
+
+      <details class="rounded-2xl border border-blue-100 bg-blue-50/60 mb-4">
+        <summary class="cursor-pointer p-4 flex items-center justify-between font-black text-blue-900">
+          <span>대출 자동한도 기준 보기/수정</span>
+          <span class="text-xs font-bold text-blue-700">기본: 가격구간별 한도 가정</span>
+        </summary>
+        <div class="p-4 pt-0 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="rounded-xl bg-white border border-blue-100 p-3">
+            <label class="text-xs font-bold text-slate-500">15억 이하 한도</label>
+            <div class="mt-1 flex items-center gap-2"><input id="loanTierLow" type="number" value="6.0" step="0.1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-right font-black num" /><span class="text-sm text-slate-500">억</span></div>
+          </div>
+          <div class="rounded-xl bg-white border border-blue-100 p-3">
+            <label class="text-xs font-bold text-slate-500">15억 초과~25억 이하 한도</label>
+            <div class="mt-1 flex items-center gap-2"><input id="loanTierMid" type="number" value="4.0" step="0.1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-right font-black num" /><span class="text-sm text-slate-500">억</span></div>
+          </div>
+          <div class="rounded-xl bg-white border border-blue-100 p-3">
+            <label class="text-xs font-bold text-slate-500">25억 초과 한도</label>
+            <div class="mt-1 flex items-center gap-2"><input id="loanTierHigh" type="number" value="2.0" step="0.1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-right font-black num" /><span class="text-sm text-slate-500">억</span></div>
+          </div>
+          <p class="md:col-span-3 text-xs text-blue-800 leading-relaxed">
+            ※ 실제 한도는 DSR, 주택 수, 지역, 은행 심사, 정책 변경에 따라 달라질 수 있습니다. 이 앱은 매물 1차 필터링용입니다.
+          </p>
+        </div>
+      </details>
+
+      <div class="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 md:p-5">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
+          <div>
+            <p class="font-black text-emerald-950">동탄 전세보증금 회수 후 사용액</p>
+            <p class="text-xs text-emerald-700 mt-1">플랜 B에만 반영됩니다.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <input id="currentDeposit" type="number" value="4.4" step="0.1" class="w-24 rounded-xl border border-emerald-200 px-3 py-2 text-right font-black num" />
+            <span class="text-xs text-slate-500">억 중</span>
+            <input id="depositUse" type="number" value="4.4" step="0.1" class="w-24 rounded-xl border border-emerald-200 px-3 py-2 text-right font-black text-emerald-700 num" />
+            <span class="text-xs text-slate-500">억 사용</span>
+          </div>
+        </div>
+        <input id="depositUseRange" type="range" min="0" max="4.4" step="0.1" value="4.4" class="w-full" />
+        <div class="grid grid-cols-3 gap-2 text-xs mt-3">
+          <button type="button" data-deposit="0" class="depositPreset rounded-xl bg-white border border-emerald-200 py-2 font-bold text-emerald-800">0억 사용</button>
+          <button type="button" data-deposit="half" class="depositPreset rounded-xl bg-white border border-emerald-200 py-2 font-bold text-emerald-800">절반 사용</button>
+          <button type="button" data-deposit="max" class="depositPreset rounded-xl bg-emerald-600 text-white py-2 font-bold">전액 사용</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 관심 매물 조건 -->
+    <section class="mb-5 rounded-[2rem] bg-white border border-slate-200 shadow-sm p-4 md:p-6">
+      <div class="flex items-start gap-3 mb-5">
+        <span class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-black shrink-0">3</span>
+        <div>
+          <h2 class="text-xl font-black">관심 매물 조건</h2>
+          <p class="text-sm text-slate-500 mt-1">매물가·입주조건·면적 기준으로 필요자금을 계산합니다.</p>
+        </div>
+      </div>
+
+      <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4 md:p-5 mb-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+          <label for="targetPriceRange" class="font-bold">관심 매물 매매가</label>
+          <div class="flex items-center gap-2">
+            <input id="targetPrice" type="number" min="5" max="60" step="0.1" value="23.6" class="w-28 rounded-xl border border-slate-300 px-3 py-2 text-right font-black num focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <span class="text-sm text-slate-500">억</span>
+          </div>
+        </div>
+        <input id="targetPriceRange" type="range" min="15" max="35" step="0.1" value="23.6" class="w-full" />
+        <div class="flex justify-between text-xs text-slate-400 mt-2"><span>15억</span><span>20억</span><span>25억</span><span>30억</span><span>35억</span></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+        <label class="rounded-2xl border border-slate-200 p-4 cursor-pointer hover:bg-slate-50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 transition">
+          <div class="flex items-start gap-3">
+            <input type="radio" name="propertyType" value="vacant" class="mt-1" checked />
+            <div>
+              <p class="font-black">실입주 가능 / 공실 매물</p>
+              <p class="text-xs text-slate-500 mt-1">매매가 전액 기준으로 매수비용을 계산합니다.</p>
+            </div>
+          </div>
+        </label>
+        <label class="rounded-2xl border border-slate-200 p-4 cursor-pointer hover:bg-slate-50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 transition">
+          <div class="flex items-start gap-3">
+            <input type="radio" name="propertyType" value="tenant" class="mt-1" />
+            <div>
+              <p class="font-black">세입자 승계 매물</p>
+              <p class="text-xs text-slate-500 mt-1">매수 대상 주택의 기존 보증금을 차감하되, 대출과 향후 퇴거 리스크는 별도 확인이 필요합니다.</p>
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <div id="tenantBox" class="hidden rounded-2xl bg-indigo-50 border border-indigo-100 p-4 md:p-5 mb-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label for="tenantDeposit" class="font-bold text-indigo-950">매수 대상 기존 세입자 보증금</label>
+              <div class="flex items-center gap-2"><input id="tenantDeposit" type="number" min="0" max="30" step="0.1" value="8.0" class="w-24 rounded-xl border border-indigo-200 px-3 py-2 text-right font-black num" /><span class="text-sm text-slate-500">억</span></div>
+            </div>
+            <input id="tenantDepositRange" type="range" min="0" max="30" step="0.1" value="8.0" class="w-full" />
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label for="tenantLoanFactor" class="font-bold text-indigo-950">승계 매물 대출 반영률</label>
+              <div class="flex items-center gap-2"><input id="tenantLoanFactor" type="number" min="0" max="100" step="5" value="100" class="w-24 rounded-xl border border-indigo-200 px-3 py-2 text-right font-black num" /><span class="text-sm text-slate-500">%</span></div>
+            </div>
+            <input id="tenantLoanFactorRange" type="range" min="0" max="100" step="5" value="100" class="w-full" />
+            <p class="text-xs text-indigo-700 mt-2">대출 보수 기준 확인 시 50% 또는 0% 적용.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <label class="text-xs font-bold text-slate-500">전용면적 기준</label>
+          <select id="areaType" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 font-bold bg-white">
+            <option value="under85" selected>전용 85㎡ 이하 · 취득세 약 3.3%</option>
+            <option value="over85">전용 85㎡ 초과 · 취득세 약 3.5%</option>
+          </select>
+        </div>
+        <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <label class="text-xs font-bold text-slate-500">예상 수리·보수비</label>
+          <div class="mt-1 flex items-center gap-2"><input id="repairCost" type="number" value="0.0" step="0.1" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-right font-black num" /><span class="text-sm text-slate-500">억</span></div>
+        </div>
+        <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <label class="text-xs font-bold text-slate-500">등기·법무·채권·이사비</label>
+          <div class="mt-1 flex items-center gap-2"><input id="otherCost" type="number" value="0.20" step="0.01" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-right font-black num" /><span class="text-sm text-slate-500">억</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. 상세 계산 결과 -->
+    <section class="mb-5 rounded-[2rem] bg-slate-950 text-white shadow-xl overflow-hidden">
+      <div class="p-4 md:p-6 border-b border-white/10 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+        <div>
+          <h2 class="text-xl font-black">상세 계산 결과</h2>
+          <p class="text-sm text-slate-400 mt-1">세후 자금과 매수 총비용을 비교합니다.</p>
+        </div>
+        <div class="text-xs text-slate-400">단위: 억원</div>
+      </div>
+
+      <div class="p-4 md:p-6 space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <article class="rounded-2xl bg-white/5 border border-white/10 p-4 md:p-5">
+            <h3 class="font-black mb-3 text-lg">세후 자금</h3>
+            <dl class="space-y-2 text-sm">
+              <div class="flex justify-between gap-4"><dt class="text-slate-400">현재 현금(전세 잔금 잔액)</dt><dd id="sumCurrentCash" class="font-bold num">0.00억</dd></div>
+              <div class="flex justify-between gap-4"><dt id="sumNNetLabel" class="text-slate-400">녹번 세후 순유입(15억 기준)</dt><dd id="sumNNet" class="font-bold num">0.00억</dd></div>
+              <div class="flex justify-between gap-4"><dt id="sumUNetLabel" class="text-slate-400">의정부 세후 순유입(4억 기준)</dt><dd id="sumUNet" class="font-bold num">0.00억</dd></div>
+              <div class="flex justify-between gap-4"><dt class="text-slate-400">예상 주식 매도액</dt><dd id="sumStock" class="font-bold num">0.00억</dd></div>
+              <div class="flex justify-between gap-4 border-t border-white/10 pt-2"><dt class="text-slate-200 font-bold">대출 제외 순자금</dt><dd id="sumEquity" class="font-black text-emerald-300 num">0.00억</dd></div>
+            </dl>
+          </article>
+
+          <article class="rounded-2xl bg-white/5 border border-white/10 p-4 md:p-5">
+            <h3 class="font-black mb-3 text-lg">매수 총비용</h3>
+            <dl class="space-y-2 text-sm">
+              <div class="flex justify-between gap-4"><dt class="text-slate-400">매매가 기준액</dt><dd id="costBase" class="font-bold num">0.00억</dd></div>
+              <div class="flex justify-between gap-4"><dt class="text-slate-400">취득세 등</dt><dd id="costAcq" class="font-bold num">0.00억</dd></div>
+              <div class="flex justify-between gap-4"><dt class="text-slate-400">매수 중개보수·VAT</dt><dd id="costBroker" class="font-bold num">0.00억</dd></div>
+              <div class="flex justify-between gap-4"><dt class="text-slate-400">등기·법무·이사·수리</dt><dd id="costOther" class="font-bold num">0.00억</dd></div>
+              <div class="flex justify-between gap-4 border-t border-white/10 pt-2"><dt class="text-slate-200 font-bold">총 필요자금</dt><dd id="costTotal" class="font-black text-rose-300 num">0.00억</dd></div>
+            </dl>
+          </article>
+        </div>
+
+        <article class="rounded-3xl bg-white/5 border border-white/10 p-4 md:p-5 overflow-hidden">
+          <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-4">
+            <div>
+              <p class="text-xs font-bold text-blue-200 mb-1">PLAN CHECK</p>
+              <h3 class="text-2xl md:text-3xl font-black">플랜별 가능성</h3>
+              <p class="text-sm text-slate-400 mt-1">대출 적용액과 동탄 보증금 반영 여부를 비교합니다.</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm lg:min-w-[620px]">
+              <div class="rounded-2xl bg-slate-950/70 border border-white/10 px-4 py-3">
+                <p class="text-slate-400 text-xs font-bold">관심 매물 매매가</p>
+                <p id="sumTargetPrice" class="font-black text-white num text-xl mt-1">0.00억</p>
+              </div>
+              <div class="rounded-2xl bg-slate-950/70 border border-white/10 px-4 py-3">
+                <p class="text-slate-400 text-xs font-bold">선택 매물 반영 대출액</p>
+                <p id="sumLoanApplied" class="font-black text-blue-300 num text-xl mt-1">0.00억</p>
+              </div>
+              <div class="rounded-2xl bg-slate-950/70 border border-white/10 px-4 py-3">
+                <p class="text-slate-400 text-xs font-bold">대출 적용 구간</p>
+                <p id="sumLoanTier" class="font-black text-slate-100 text-sm mt-1">-</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="rounded-3xl bg-slate-950/80 border border-white/10 p-4 md:p-5">
+              <div class="flex items-start justify-between gap-3 mb-4">
+                <div>
+                  <h4 class="text-xl font-black">플랜 A</h4>
+                  <p class="text-sm text-slate-400 mt-1">만기 전 이사 · 동탄 보증금 미회수</p>
+                </div>
+                <span id="planAStatus" class="inline-flex shrink-0 px-3 py-1 rounded-full text-xs font-black bg-slate-800 text-slate-200">-</span>
+              </div>
+              <dl class="space-y-2 text-sm">
+                <div class="flex justify-between gap-4"><dt class="text-slate-400">대출 제외 순자금</dt><dd id="planAEquity" class="font-bold num">0.00억</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-400">반영 대출액</dt><dd id="planALoan" class="font-bold text-blue-300 num">0.00억</dd></div>
+                <div class="flex justify-between gap-4 border-t border-white/10 pt-2"><dt class="text-slate-200 font-bold">총 조달액</dt><dd id="planATotal" class="font-black num">0.00억</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-400">매수 총비용</dt><dd id="planACost" class="font-bold text-rose-300 num">0.00억</dd></div>
+                <div class="flex justify-between gap-4 border-t border-white/10 pt-2"><dt class="text-slate-200 font-bold">거래 후 잔여</dt><dd id="planARemain" class="font-black num">0.00억</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-400">최소 현금 차감 후</dt><dd id="planAReserveResult" class="font-black num">0.00억</dd></div>
+              </dl>
+              <p class="text-xs text-slate-500 mt-3">계산식: 대출 제외 순자금 + 반영 대출액 - 매수 총비용</p>
+            </div>
+
+            <div class="rounded-3xl bg-slate-950/80 border border-white/10 p-4 md:p-5">
+              <div class="flex items-start justify-between gap-3 mb-4">
+                <div>
+                  <h4 class="text-xl font-black">플랜 B</h4>
+                  <p class="text-sm text-slate-400 mt-1">만기 후 이사 · 동탄 보증금 사용액 반영</p>
+                </div>
+                <span id="planBStatus" class="inline-flex shrink-0 px-3 py-1 rounded-full text-xs font-black bg-slate-800 text-slate-200">-</span>
+              </div>
+              <dl class="space-y-2 text-sm">
+                <div class="flex justify-between gap-4"><dt class="text-slate-400">만기 전 순자금</dt><dd id="planBEquity" class="font-bold num">0.00억</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-400">동탄 보증금 사용액</dt><dd id="planBDeposit" class="font-bold text-emerald-300 num">0.00억</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-400">반영 대출액</dt><dd id="planBLoan" class="font-bold text-blue-300 num">0.00억</dd></div>
+                <div class="flex justify-between gap-4 border-t border-white/10 pt-2"><dt class="text-slate-200 font-bold">총 조달액</dt><dd id="planBTotal" class="font-black num">0.00억</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-400">매수 총비용</dt><dd id="planBCost" class="font-bold text-rose-300 num">0.00억</dd></div>
+                <div class="flex justify-between gap-4 border-t border-white/10 pt-2"><dt class="text-slate-200 font-bold">거래 후 잔여</dt><dd id="planBRemain" class="font-black num">0.00억</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-400">최소 현금 차감 후</dt><dd id="planBReserveResult" class="font-black num">0.00억</dd></div>
+              </dl>
+              <p class="text-xs text-slate-500 mt-3">계산식: 만기 전 순자금 + 동탄 보증금 사용액 + 반영 대출액 - 매수 총비용</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 5. 매매가 시나리오 -->
+    <section class="mb-5 rounded-[2rem] bg-white border border-slate-200 shadow-sm p-4 md:p-6">
+      <div class="flex items-start gap-3 mb-5">
+        <span class="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center font-black shrink-0">5</span>
+        <div>
+          <h2 class="text-xl font-black">매매가 시나리오</h2>
+          <p class="text-sm text-slate-500 mt-1">현재 자산 기준으로 만기 전·후 매수 가능 가격을 비교합니다. 25억 초과 시 대출 한도가 낮아질 수 있습니다.</p>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm min-w-[900px] border-collapse">
+          <thead class="text-slate-700 border-b border-slate-300">
+            <tr>
+              <th rowspan="2" class="text-center py-3 px-2 font-black border-b border-slate-300">시나리오</th>
+              <th rowspan="2" class="text-center py-3 px-2 font-black border-b border-slate-300">매매가</th>
+              <th rowspan="2" class="text-center py-3 px-2 font-black border-b border-slate-300">대출</th>
+              <th colspan="2" class="text-center py-2 px-2 font-black border-b border-slate-300 text-lg">총 필요자금</th>
+            </tr>
+            <tr>
+              <th id="scenarioPlanAHeader" class="text-center py-2.5 px-2 font-black border-b border-slate-300 text-base leading-snug"></th>
+              <th id="scenarioPlanBHeader" class="text-center py-2.5 px-2 font-black border-b border-slate-300 text-base leading-snug"></th>
+            </tr>
+          </thead>
+          <tbody id="scenarioRows" class="divide-y divide-slate-200"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 6. 해석 -->
+    <section class="rounded-[2rem] bg-white border border-slate-200 shadow-sm p-4 md:p-6">
+      <div class="flex items-start gap-3 mb-4">
+        <span class="w-8 h-8 rounded-full bg-slate-700 text-white flex items-center justify-center font-black shrink-0">6</span>
+        <div>
+          <h2 class="text-xl font-black">해석</h2>
+          <p class="text-sm text-slate-500 mt-1">현재 조건의 판단 요약</p>
+        </div>
+      </div>
+      <div id="interpretation" class="rounded-2xl bg-slate-50 border border-slate-200 p-4 text-sm leading-relaxed text-slate-700 space-y-2"></div>
+    </section>
+      <!-- 7. 후순위 확장 모듈 -->
+    <section class="mt-5 rounded-[2rem] bg-white border border-slate-200 shadow-sm overflow-hidden">
+      <details>
+        <summary class="cursor-pointer p-4 md:p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div class="flex items-start gap-3">
+            <span class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-black shrink-0">7</span>
+            <div>
+              <h2 class="text-xl font-black">후순위 확장 모듈</h2>
+              <p class="text-sm text-slate-500 mt-1">지도·통근·실거래·투자성 기능은 기획 확정 후 순차 연결합니다.</p>
+            </div>
+          </div>
+          <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">클릭해서 열기 ▼</span>
+        </summary>
+
+        <div class="px-4 md:px-6 pb-5 md:pb-6 border-t border-slate-100">
+          <div class="rounded-3xl bg-slate-950 text-white p-4 md:p-5 mb-4">
+            <p class="text-xs font-bold text-blue-200 mb-1">MODULE ROADMAP</p>
+            <h3 class="text-lg md:text-2xl font-black">예산 판단을 해치지 않는 방식으로 후순위 기능을 붙입니다</h3>
+            <p class="text-sm text-slate-400 mt-2 leading-relaxed">
+              본 v20 화면은 세후 자금·대출·매매가 시나리오 판단을 기준 화면으로 유지합니다.
+              아래 기능들은 현재 계산 로직을 변경하지 않고, 선택 매물 검증용 모듈로만 추가합니다.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <article class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+              <div class="flex items-center justify-between gap-3 mb-2">
+                <p class="font-black text-slate-900">지도·단지 검색 모듈</p>
+                <span class="text-[11px] font-black rounded-full bg-slate-200 text-slate-700 px-2.5 py-1">P1</span>
+              </div>
+              <p class="text-sm text-slate-600 leading-relaxed">
+                Kakao Local API로 단지명/주소를 검색하고, 아파트·오피스텔 등 결과를 사용자가 직접 선택합니다.
+                선택 단지와 회사 주소만 지도에 표시합니다.
+              </p>
+              <ul class="text-xs text-slate-500 mt-3 space-y-1">
+                <li>· 검색 결과 자동 확정 금지</li>
+                <li>· 이전 검색 결과 잔상 제거</li>
+                <li>· 회사/단지 마커 라벨 명확화</li>
+              </ul>
+            </article>
+
+            <article class="rounded-2xl bg-blue-50 border border-blue-100 p-4">
+              <div class="flex items-center justify-between gap-3 mb-2">
+                <p class="font-black text-blue-950">통근·셔틀 검증 모듈</p>
+                <span class="text-[11px] font-black rounded-full bg-blue-100 text-blue-700 px-2.5 py-1">P2</span>
+              </div>
+              <p class="text-sm text-blue-900/80 leading-relaxed">
+                선택 단지에서 회사까지 ODsay 대중교통 시간을 계산하고, 셔틀 탑승지까지의 도보 접근성을 별도 계산합니다.
+              </p>
+              <ul class="text-xs text-blue-800/80 mt-3 space-y-1">
+                <li>· 단지별 좌표 기준 개별 계산</li>
+                <li>· 권역 평균 통근시간 적용 금지</li>
+                <li>· 총 소요시간/환승/도보거리 표시</li>
+              </ul>
+            </article>
+
+            <article class="rounded-2xl bg-emerald-50 border border-emerald-100 p-4">
+              <div class="flex items-center justify-between gap-3 mb-2">
+                <p class="font-black text-emerald-950">실거래가·평형별 예산 모듈</p>
+                <span class="text-[11px] font-black rounded-full bg-emerald-100 text-emerald-700 px-2.5 py-1">P3</span>
+              </div>
+              <p class="text-sm text-emerald-900/80 leading-relaxed">
+                국토교통부 아파트 매매 실거래가를 활용해 평형별 최근 거래가를 집계하고,
+                Plan A/B 기준으로 진입 가능한 평형을 표시합니다.
+              </p>
+              <ul class="text-xs text-emerald-800/80 mt-3 space-y-1">
+                <li>· 최근 실거래가/거래월/거래건수 표시</li>
+                <li>· 설정 예산 내 가능·초과 구분</li>
+                <li>· 단지명 정규화 후 오매칭 방지</li>
+              </ul>
+            </article>
+
+            <article class="rounded-2xl bg-purple-50 border border-purple-100 p-4">
+              <div class="flex items-center justify-between gap-3 mb-2">
+                <p class="font-black text-purple-950">투자성 판단 모듈</p>
+                <span class="text-[11px] font-black rounded-full bg-purple-100 text-purple-700 px-2.5 py-1">P4</span>
+              </div>
+              <p class="text-sm text-purple-900/80 leading-relaxed">
+                가격 모멘텀, 거래 유동성, 예산 진입성, 학군·학원가, 통근·셔틀 조건을 종합해 판단 보조 지표를 제공합니다.
+              </p>
+              <ul class="text-xs text-purple-800/80 mt-3 space-y-1">
+                <li>· 미래 가격 상승 단정 금지</li>
+                <li>· 데이터 부족 시 부족하다고 표시</li>
+                <li>· 추천 이유와 리스크를 함께 표기</li>
+              </ul>
+            </article>
+          </div>
+
+          <div class="mt-4 rounded-2xl bg-amber-50 border border-amber-100 p-4">
+            <p class="font-black text-amber-950">개발 원칙</p>
+            <p class="text-sm text-amber-900/80 mt-1 leading-relaxed">
+              후순위 모듈은 현재 v20의 자금 계산 로직을 변경하지 않습니다.
+              모든 외부 API 키는 브라우저에 노출하지 않고 Vercel 환경변수와 서버 API Route를 통해 관리합니다.
+            </p>
+          </div>
+        </div>
+      </details>
+    </section>
+
+  </main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const q = (sel) => document.querySelector(sel);
+  const qa = (sel) => Array.from(document.querySelectorAll(sel));
+  const val = (id, fallback = 0) => {
+    const n = parseFloat($(id).value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const fmt = (n, digits = 2) => `${Number(n).toFixed(digits)}`;
+  const labelMoney = (n) => `${Number(n).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}억`;
+  const money = (n) => `${fmt(Math.abs(n))}억`;
+  const pct = (n) => `${Math.round(n * 1000) / 10}%`;
+
+  function syncPair(inputId, rangeId) {
+    const input = $(inputId);
+    const range = $(rangeId);
+    input.addEventListener('input', () => {
+      let v = val(inputId, 0);
+      const min = parseFloat(range.min);
+      const max = parseFloat(range.max);
+      if (v < min) v = min;
+      if (v > max) v = max;
+      range.value = v;
+      calculate();
+    });
+    range.addEventListener('input', () => {
+      input.value = range.value;
+      calculate();
+    });
+  }
+
+  function getPropertyType() { return q('input[name="propertyType"]:checked').value; }
+
+  function brokerRate(price) {
+    if (price < 0.5) return 0.006;
+    if (price < 2) return 0.005;
+    if (price < 9) return 0.004;
+    if (price < 12) return 0.005;
+    if (price < 15) return 0.006;
+    return 0.007;
+  }
+
+  function brokerFee(price) {
+    return price * brokerRate(price) * 1.1; // VAT 포함 상한 단순 가정
+  }
+
+  function acquisitionTaxRate() {
+    return $('areaType').value === 'over85' ? 0.035 : 0.033;
+  }
+
+  function getAutoLoanCap(price) {
+    const low = val('loanTierLow', 6.0);
+    const mid = val('loanTierMid', 4.0);
+    const high = val('loanTierHigh', 2.0);
+    if (price <= 15) return low;
+    if (price <= 25) return mid;
+    return high;
+  }
+
+  function getLoan(price) {
+    if ($('loanMode').value === 'zero') return 0;
+    if ($('loanMode').value === 'manual') return val('manualLoan', 0);
+    let loan = getAutoLoanCap(price);
+    if (getPropertyType() === 'tenant') {
+      loan = loan * (val('tenantLoanFactor', 100) / 100);
+    }
+    return loan;
+  }
+
+  function loanNote(price) {
+    if ($('loanMode').value === 'zero') return '대출 미반영';
+    if ($('loanMode').value === 'manual') return '직접 입력값 반영';
+    const base = price <= 15 ? '15억 이하 구간' : price <= 25 ? '15억 초과~25억 이하 구간' : '25억 초과 구간';
+    if (getPropertyType() === 'tenant') return `${base} · 승계 매물 반영률 ${val('tenantLoanFactor', 100)}%`;
+    return base;
+  }
+
+  function calcAt(price) {
+    const propertyType = getPropertyType();
+    const tenantDeposit = propertyType === 'tenant' ? Math.min(val('tenantDeposit', 0), price) : 0;
+    const loan = getLoan(price);
+
+    const currentCash = val('currentCash', 0);
+    const nSell = val('nSell', 0);
+    const nJeonse = val('nJeonse', 0);
+    const nCgt = val('nCgt', 0);
+    const uSell = val('uSell', 0);
+    const uDeposit = val('uDeposit', 0);
+    const uCgt = val('uCgt', 0);
+    const stock = val('spouseStock', 0);
+    const nBroker = brokerFee(nSell);
+    const uBroker = brokerFee(uSell);
+    const nNet = nSell - nJeonse - nBroker - nCgt;
+    const uNet = uSell - uDeposit - uBroker - uCgt;
+    const equityBeforeLoan = currentCash + nNet + uNet + stock;
+
+    const acqTax = price * acquisitionTaxRate();
+    const buyBroker = brokerFee(price);
+    const otherCost = val('otherCost', 0);
+    const repairCost = val('repairCost', 0);
+    const basePriceNeed = price - tenantDeposit;
+    const purchaseCost = basePriceNeed + acqTax + buyBroker + otherCost + repairCost;
+
+    const currentDeposit = val('currentDeposit', 4.4);
+    let depositUse = Math.max(0, Math.min(val('depositUse', 0), currentDeposit));
+    const reserveCash = val('reserveCash', 0);
+
+    const planATotal = equityBeforeLoan + loan;
+    const planBTotal = equityBeforeLoan + loan + depositUse;
+    const planARemain = planATotal - purchaseCost;
+    const planBRemain = planBTotal - purchaseCost;
+    const planAAfterReserve = planARemain - reserveCash;
+    const planBAfterReserve = planBRemain - reserveCash;
+
+    return { price, propertyType, tenantDeposit, loan, nSell, nJeonse, nCgt, uSell, uDeposit, uCgt, stock, nBroker, uBroker, nNet, uNet, currentCash, equityBeforeLoan, acqTax, buyBroker, otherCost, repairCost, basePriceNeed, purchaseCost, depositUse, reserveCash, planATotal, planBTotal, planARemain, planBRemain, planAAfterReserve, planBAfterReserve };
+  }
+
+  function badgeClass(diff) {
+    if (diff >= 1) return 'bg-emerald-100 text-emerald-800';
+    if (diff >= 0) return 'bg-amber-100 text-amber-800';
+    return 'bg-rose-100 text-rose-800';
+  }
+
+  function resultHtml(diff) {
+    if (diff >= 0) return `<span class="text-emerald-700 font-black">잔여 ${money(diff)}</span>`;
+    return `<span class="text-rose-700 font-black">부족 ${money(diff)}</span>`;
+  }
+
+  function darkResultText(diff) {
+    if (diff >= 0) return `<span class="text-emerald-300 font-black">잔여 ${money(diff)}</span>`;
+    return `<span class="text-rose-300 font-black">부족 ${money(diff)}</span>`;
+  }
+
+  function closeEnough(a, b) { return Math.abs(Number(a) - Number(b)) < 0.001; }
+
+  function setPresetStyle(btn, color, active) {
+    const palette = {
+      rose: ['bg-rose-600', 'text-white', 'border-rose-600', 'shadow-sm', 'bg-white', 'text-rose-800', 'border-rose-200'],
+      blue: ['bg-blue-600', 'text-white', 'border-blue-600', 'shadow-sm', 'bg-white', 'text-blue-800', 'border-blue-200'],
+      emerald: ['bg-emerald-600', 'text-white', 'border-emerald-600', 'shadow-sm', 'bg-white', 'text-emerald-800', 'border-emerald-200']
+    }[color];
+    const base = 'rounded-xl border py-2 font-bold transition';
+    const clsName = btn.classList.contains('taxPreset') ? 'taxPreset' : btn.classList.contains('stockPreset') ? 'stockPreset' : 'depositPreset';
+    if (active) {
+      btn.className = `${clsName} ${base} ${palette[0]} ${palette[1]} ${palette[2]} ${palette[3]}`;
+    } else {
+      btn.className = `${clsName} ${base} ${palette[4]} ${palette[5]} ${palette[6]}`;
+    }
+  }
+
+  function updatePresetButtons() {
+    const nCgt = val('nCgt', 0);
+    const uCgt = val('uCgt', 0);
+    qa('.taxPreset').forEach(btn => {
+      setPresetStyle(btn, 'rose', closeEnough(nCgt, btn.getAttribute('data-ncgt')) && closeEnough(uCgt, btn.getAttribute('data-ucgt')));
+    });
+
+    const stock = val('spouseStock', 0);
+    qa('.stockPreset').forEach(btn => {
+      setPresetStyle(btn, 'blue', closeEnough(stock, btn.getAttribute('data-stock')));
+    });
+
+    const currentDeposit = val('currentDeposit', 4.4);
+    const depositUse = Math.max(0, Math.min(val('depositUse', 0), currentDeposit));
+    qa('.depositPreset').forEach(btn => {
+      const raw = btn.getAttribute('data-deposit');
+      const presetValue = raw === 'max' ? currentDeposit : raw === 'half' ? currentDeposit / 2 : parseFloat(raw);
+      setPresetStyle(btn, 'emerald', closeEnough(depositUse, presetValue));
+    });
+  }
+
+  function setText(id, text) { $(id).textContent = text; }
+  function setMoney(id, n) { $(id).textContent = `${fmt(n)}억`; }
+  function setNegMoney(id, n) { $(id).textContent = `-${fmt(Math.abs(n))}억`; }
+
+  function findMaxPrice(plan) {
+    return findPriceForDiff(plan, 0);
+  }
+
+  function findPriceForDiff(plan, targetDiff) {
+    // 현재 매물 유형/비용 조건을 유지하고 매매가만 바꾼 산술상 가격선
+    let lo = 0;
+    let hi = 60;
+    for (let i = 0; i < 80; i++) {
+      const mid = (lo + hi) / 2;
+      const r = calcAt(mid);
+      const diff = plan === 'B' ? r.planBAfterReserve : r.planAAfterReserve;
+      if (diff >= targetDiff) lo = mid;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  function judgement(diff) {
+    if (diff >= 1) return { label: '가능권', cls: 'bg-emerald-100 text-emerald-800' };
+    if (diff >= 0) return { label: '여유 부족', cls: 'bg-amber-100 text-amber-800' };
+    return { label: '부족', cls: 'bg-rose-100 text-rose-800' };
+  }
+
+  function combinedJudgement(planA, planB) {
+    const lowThreshold = 1.0; // 1억 미만 잔여는 여유 부족으로 표시
+    const aOk = planA >= 0;
+    const bOk = planB >= 0;
+    const sub = `${aOk ? 'A 가능' : 'A 부족'} / ${bOk ? 'B 가능' : 'B 부족'}`;
+
+    if (!aOk && !bOk) {
+      return { label: '현재 조건 부족', cls: 'bg-rose-100 text-rose-800', sub };
+    }
+    if ((aOk && planA < lowThreshold) || (bOk && planB < lowThreshold)) {
+      return { label: '가능하나 여유 부족', cls: 'bg-amber-100 text-amber-800', sub };
+    }
+    if (aOk && bOk) {
+      return { label: '만기 전·후 가능', cls: 'bg-emerald-100 text-emerald-800', sub };
+    }
+    if (!aOk && bOk) {
+      return { label: '만기 후 가능', cls: 'bg-blue-100 text-blue-800', sub };
+    }
+    return { label: '가능하나 여유 부족', cls: 'bg-amber-100 text-amber-800', sub };
+  }
+
+  function scenarioPlanCell(cost, diff) {
+    const ok = diff >= 0;
+    const statusCls = ok ? 'text-emerald-700' : 'text-rose-700';
+    const main = ok ? '매매 가능' : '매매 불가';
+    const sub = ok ? `잔여 ${fmt(diff)}억` : `${fmt(Math.abs(diff))}억 부족`;
+    return `
+      <div class="text-center leading-snug py-0.5">
+        <p class="text-[11px] text-slate-500 font-bold">매수 총비용</p>
+        <p class="text-xs md:text-sm font-black text-slate-800">${fmt(cost)}억</p>
+        <p class="mt-1.5 text-sm md:text-base font-black ${statusCls}">${main}</p>
+        <p class="mt-1.5 text-base md:text-lg font-black ${statusCls}">${sub}</p>
+      </div>`;
+  }
+
+  function scenarioNameCell(name) {
+    const cls = name === '관심 매물가' ? 'text-blue-700' : 'text-slate-700';
+    return `<span class="font-black text-sm md:text-base ${cls}">${name}</span>`;
+  }
+
+  function renderScenarioRows() {
+    const target = val('targetPrice', 23.6);
+    const current = calcAt(target);
+    $('scenarioPlanAHeader').innerHTML = `<span class="block">플랜 A(만기 전)</span><span class="block">총 조달액 ${fmt(current.planATotal)}억</span>`;
+    $('scenarioPlanBHeader').innerHTML = `<span class="block">플랜 B(만기 후)</span><span class="block">총 조달액 ${fmt(current.planBTotal)}억</span>`;
+
+    const maxA = findMaxPrice('A');
+    const maxB = findMaxPrice('B');
+    const stableA = findPriceForDiff('A', 1.0);
+    const stableB = findPriceForDiff('B', 1.0);
+    const scenarios = [
+      { name: '플랜 A 안정가', price: stableA },
+      { name: '플랜 A 한계가', price: maxA },
+      { name: '관심 매물가', price: target },
+      { name: '플랜 B 안정가', price: stableB },
+      { name: '플랜 B 한계가', price: maxB }
+    ];
+    $('scenarioRows').innerHTML = scenarios.map(s => {
+      const p = Math.max(0, s.price);
+      const r = calcAt(p);
+      return `
+        <tr>
+          <td class="py-3.5 px-2 text-center align-middle">${scenarioNameCell(s.name)}</td>
+          <td class="py-3.5 px-2 text-center font-black text-base num align-middle">${fmt(p)}억</td>
+          <td class="py-3.5 px-2 text-center text-base num align-middle">${fmt(r.loan)}억</td>
+          <td class="py-3.5 px-2 align-middle border-l border-slate-200">${scenarioPlanCell(r.purchaseCost, r.planAAfterReserve)}</td>
+          <td class="py-3.5 px-2 align-middle border-l border-slate-200">${scenarioPlanCell(r.purchaseCost, r.planBAfterReserve)}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  function calculate() {
+    const price = val('targetPrice', 23.6);
+    const r = calcAt(price);
+    $('tenantBox').classList.toggle('hidden', r.propertyType !== 'tenant');
+    $('manualLoanBox').classList.toggle('hidden', $('loanMode').value !== 'manual');
+
+    const currentDeposit = val('currentDeposit', 4.4);
+    let depositUse = Math.max(0, Math.min(val('depositUse', 0), currentDeposit));
+    $('depositUse').value = fmt(depositUse, 1);
+    $('depositUseRange').max = currentDeposit;
+    $('depositUseRange').value = depositUse;
+    updatePresetButtons();
+
+    setText('cardPurchaseCost', fmt(r.purchaseCost));
+    setText('cardPurchaseNote', r.propertyType === 'tenant'
+      ? `매매가 ${fmt(r.price)}억 - 승계보증금 ${fmt(r.tenantDeposit)}억 + 부대비용`
+      : `매매가 ${fmt(r.price)}억 + 취득세·중개·기타비용`);
+    setText('cardLoan', fmt(r.loan));
+    setText('cardLoanNote', loanNote(price));
+    $('cardPlanA').innerHTML = resultHtml(r.planAAfterReserve);
+    $('cardPlanB').innerHTML = resultHtml(r.planBAfterReserve);
+
+    const maxA = findMaxPrice('A');
+    const maxB = findMaxPrice('B');
+    setText('cardMaxA', fmt(maxA));
+
+    setMoney('tdNSell', r.nSell);
+    setNegMoney('tdNDeposit', r.nJeonse);
+    setNegMoney('tdNBroker', r.nBroker);
+    setNegMoney('tdNCgt', r.nCgt);
+    setMoney('tdNNet', r.nNet);
+    setMoney('tdUSell', r.uSell);
+    setNegMoney('tdUDeposit', r.uDeposit);
+    setNegMoney('tdUBroker', r.uBroker);
+    setNegMoney('tdUCgt', r.uCgt);
+    setMoney('tdUNet', r.uNet);
+
+    setMoney('sumCurrentCash', r.currentCash);
+    setMoney('sumNNet', r.nNet);
+    setMoney('sumUNet', r.uNet);
+    setMoney('sumStock', r.stock);
+    setMoney('sumEquity', r.equityBeforeLoan);
+    setText('topCurrentCash', fmt(r.currentCash));
+    setText('topNNet', fmt(r.nNet));
+    setText('topUNet', fmt(r.uNet));
+    setText('topStock', fmt(r.stock));
+    setText('topEquity', fmt(r.equityBeforeLoan));
+    setText('topEquityMirror', fmt(r.equityBeforeLoan));
+    setText('topEquityForPlanB', fmt(r.equityBeforeLoan));
+    setText('topDepositUse', fmt(r.depositUse));
+    setText('topEquityAfterDeposit', fmt(r.equityBeforeLoan + r.depositUse));
+    setText('topEquityAfterDepositMini', fmt(r.equityBeforeLoan + r.depositUse));
+    setText('topNNetLabel', `녹번 세후 순유입(${labelMoney(r.nSell)} 기준)`);
+    setText('topUNetLabel', `의정부 세후 순유입(${labelMoney(r.uSell)} 기준)`);
+    setText('sumNNetLabel', `녹번 세후 순유입(${labelMoney(r.nSell)} 기준)`);
+    setText('sumUNetLabel', `의정부 세후 순유입(${labelMoney(r.uSell)} 기준)`);
+    const isClose = (a, b) => Math.abs(a - b) < 0.005;
+    let taxScenarioHtml = '';
+    if (isClose(r.nCgt, 0.31) && isClose(r.uCgt, 0.00)) {
+      taxScenarioHtml = `
+        <p><strong>낙관 산출 기준</strong></p>
+        <p>· 녹번: 12억 초과분만 과세, 취득원가 약 4.95억 및 장기보유특별공제 반영.</p>
+        <p>· 의정부: 1세대 1주택 비과세 인정 가정.</p>
+        <p class="text-rose-600">※ 이 비율은 법정세율이 아닙니다.</p>
+      `;
+    } else if (isClose(r.nCgt, 0.31) && isClose(r.uCgt, 0.16)) {
+      taxScenarioHtml = `
+        <p><strong>표준 산출 기준</strong></p>
+        <p>· 녹번: 12억 초과분 비과세 후 과세분 반영.</p>
+        <p>· 의정부: 비과세 불확실성에 대비해 약 0.16억 반영.</p>
+        <p class="text-rose-600">※ 사전 세무 검증 전까지 기본값으로 사용.</p>
+      `;
+    } else if (isClose(r.nCgt, 0.43) && isClose(r.uCgt, 0.23)) {
+      taxScenarioHtml = `
+        <p><strong>보수 산출 기준</strong></p>
+        <p>· 녹번: 취득원가·공제 축소 가능성 반영.</p>
+        <p>· 의정부: 비과세 불인정 또는 필요경비 축소 가능성 반영.</p>
+        <p class="text-rose-600">※ 자금계획 안전마진 검토용.</p>
+      `;
+    } else {
+      taxScenarioHtml = `
+        <p><strong>직접 입력 기준</strong></p>
+        <p>· 현재 입력된 양도세 값을 그대로 반영합니다.</p>
+        <p>· 실제 세액은 취득가, 보유·거주기간, 필요경비, 비과세 여부에 따라 달라질 수 있습니다.</p>
+      `;
+    }
+    $('taxScenarioNote').innerHTML = taxScenarioHtml;
+    setText('costBase', fmt(r.basePriceNeed));
+    setMoney('costAcq', r.acqTax);
+    setMoney('costBroker', r.buyBroker);
+    setMoney('costOther', r.otherCost + r.repairCost);
+    setMoney('costTotal', r.purchaseCost);
+    setMoney('sumTargetPrice', r.price);
+    setMoney('sumLoanApplied', r.loan);
+    setText('sumLoanTier', loanNote(r.price));
+
+    setMoney('planAEquity', r.equityBeforeLoan);
+    setMoney('planALoan', r.loan);
+    setMoney('planATotal', r.planATotal);
+    setMoney('planACost', r.purchaseCost);
+    $('planARemain').innerHTML = darkResultText(r.planARemain);
+    $('planAReserveResult').innerHTML = darkResultText(r.planAAfterReserve);
+
+    setMoney('planBEquity', r.equityBeforeLoan);
+    setMoney('planBDeposit', r.depositUse);
+    setMoney('planBLoan', r.loan);
+    setMoney('planBTotal', r.planBTotal);
+    setMoney('planBCost', r.purchaseCost);
+    $('planBRemain').innerHTML = darkResultText(r.planBRemain);
+    $('planBReserveResult').innerHTML = darkResultText(r.planBAfterReserve);
+
+    const ja = judgement(r.planAAfterReserve);
+    const jb = judgement(r.planBAfterReserve);
+    $('planAStatus').textContent = ja.label;
+    $('planAStatus').className = `inline-flex shrink-0 px-3 py-1 rounded-full text-xs font-black ${ja.cls}`;
+    $('planBStatus').textContent = jb.label;
+    $('planBStatus').className = `inline-flex shrink-0 px-3 py-1 rounded-full text-xs font-black ${jb.cls}`;
+
+    const combined = combinedJudgement(r.planAAfterReserve, r.planBAfterReserve);
+    $('topPlanAStatus').textContent = ja.label;
+    $('topPlanAStatus').className = `inline-flex px-2.5 py-1 rounded-full text-[11px] font-black ${ja.cls}`;
+    $('topPlanBStatus').textContent = jb.label;
+    $('topPlanBStatus').className = `inline-flex px-2.5 py-1 rounded-full text-[11px] font-black ${jb.cls}`;
+
+    renderScenarioRows();
+    renderInterpretation(r, maxA, maxB, combined);
+  }
+
+  function renderInterpretation(r, maxA, maxB, combined) {
+    const target = r.price;
+    const aOk = r.planAAfterReserve >= 0;
+    const bOk = r.planBAfterReserve >= 0;
+    const reserve = val('reserveCash', 0);
+    const propertyTypeText = r.propertyType === 'tenant' ? '세입자 승계 매물' : '실입주 가능/공실 매물';
+    const msg = [];
+    msg.push(`<p><strong>종합판단:</strong> <span class="inline-flex px-2 py-1 rounded-full text-xs font-black ${combined.cls}">${combined.label}</span> <span class="text-slate-500 text-xs">${combined.sub}</span></p>`);
+    msg.push(`<p>관심 매물가 <strong>${fmt(target)}억</strong> 기준, ${propertyTypeText}으로 계산했습니다. 반영 대출액은 <strong>${fmt(r.loan)}억</strong>이며, 대출 적용 기준은 <strong>${loanNote(target)}</strong>입니다.</p>`);
+    msg.push(`<p>플랜 A(만기 전)는 최소 현금 ${fmt(reserve)}억 차감 후 <strong class="${aOk ? 'text-emerald-700' : 'text-rose-700'}">${aOk ? '잔여' : '부족'} ${money(r.planAAfterReserve)}</strong>입니다. 플랜 B(만기 후)는 동탄 보증금 사용액 ${fmt(r.depositUse)}억 반영 후 <strong class="${bOk ? 'text-emerald-700' : 'text-rose-700'}">${bOk ? '잔여' : '부족'} ${money(r.planBAfterReserve)}</strong>입니다.</p>`);
+    msg.push(`<p>현재 비용 조건에서 산술상 최대 매매가는 플랜 A 약 <strong>${fmt(maxA)}억</strong>, 플랜 B 약 <strong>${fmt(maxB)}억</strong>입니다. 단, 이 값은 세무·대출 확정 전의 1차 필터링 값입니다.</p>`);
+    if (target > 25) msg.push(`<p class="text-rose-700"><strong>주의:</strong> 관심 매물가가 25억을 초과해 자동 대출 한도가 낮게 반영될 수 있습니다. 실제 은행 상담 결과로 보정해야 합니다.</p>`);
+    if (r.propertyType === 'tenant') msg.push(`<p class="text-indigo-700"><strong>승계 매물 주의:</strong> 기존 보증금 차감으로 초기 필요자금은 줄지만, 퇴거 시점·대출 가능액·실입주 가능일 확인이 필요합니다.</p>`);
+    $('interpretation').innerHTML = msg.join('');
+  }
+
+  function init() {
+    syncPair('targetPrice', 'targetPriceRange');
+    syncPair('tenantDeposit', 'tenantDepositRange');
+    syncPair('tenantLoanFactor', 'tenantLoanFactorRange');
+    syncPair('depositUse', 'depositUseRange');
+
+    ['currentCash','nSell','nJeonse','nCgt','uSell','uDeposit','uCgt','spouseStock','loanMode','manualLoan','loanTierLow','loanTierMid','loanTierHigh','reserveCash','currentDeposit','depositUse','areaType','repairCost','otherCost'].forEach(id => {
+      $(id).addEventListener('input', calculate);
+      $(id).addEventListener('change', calculate);
+    });
+    qa('input[name="propertyType"]').forEach(el => el.addEventListener('change', calculate));
+
+    qa('.taxPreset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $('nCgt').value = btn.getAttribute('data-ncgt');
+        $('uCgt').value = btn.getAttribute('data-ucgt');
+        calculate();
+      });
+    });
+    qa('.stockPreset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $('spouseStock').value = btn.getAttribute('data-stock');
+        calculate();
+      });
+    });
+    qa('.depositPreset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const max = val('currentDeposit', 4.4);
+        const raw = btn.getAttribute('data-deposit');
+        const value = raw === 'max' ? max : raw === 'half' ? max / 2 : parseFloat(raw);
+        $('depositUse').value = fmt(Math.min(value, max), 1);
+        $('depositUseRange').max = max;
+        $('depositUseRange').value = Math.min(value, max);
+        calculate();
+      });
+    });
+
+    calculate();
+  }
+
+  window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
