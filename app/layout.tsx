@@ -1,9 +1,8 @@
 import './globals.css';
-import './investment.css';
 
 export const metadata = {
-  title: 'Property Map GPT',
-  description: '이사 후보지 자동 발굴 대시보드',
+  title: '이사계획 세후 예산 판단 대시보드 v20',
+  description: '세후 자금, 대출, 매매가 시나리오 기반 이사 예산 판단 대시보드',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
