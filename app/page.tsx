@@ -11,11 +11,25 @@ export default function HomePage() {
     const iframeBody = iframeDoc?.body;
     if (!iframeDoc || !iframeBody) return;
 
+    const appendDetailUiFix = () => {
+      if (iframeDoc.getElementById('detail-ui-fix')) return;
+      const detailScript = iframeDoc.createElement('script');
+      detailScript.id = 'detail-ui-fix';
+      detailScript.src = '/detail-ui-fix.js?v=deposit-button-unit-fix-1';
+      iframeBody.appendChild(detailScript);
+    };
+
     const appendAuthoritativeSync = () => {
-      if (iframeDoc.getElementById('authoritative-budget-sync')) return;
+      const existingSync = iframeDoc.getElementById('authoritative-budget-sync');
+      if (existingSync) {
+        appendDetailUiFix();
+        return;
+      }
+
       const syncScript = iframeDoc.createElement('script');
       syncScript.id = 'authoritative-budget-sync';
       syncScript.src = '/authoritative-budget-sync.js?v=all-input-sync-1';
+      syncScript.onload = appendDetailUiFix;
       iframeBody.appendChild(syncScript);
     };
 
