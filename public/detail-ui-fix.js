@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var OUTER_EOK_IDS = [
+  var UNIT_VALUE_IDS = [
     'topEquity',
     'topEquityAfterDeposit',
     'topCurrentCash',
@@ -30,13 +30,34 @@
     return match ? match[0] : null;
   }
 
-  function normalizeOuterUnitValues() {
-    OUTER_EOK_IDS.forEach(function (id) {
+  function removeOuterUnitNode(el) {
+    if (!el) return;
+
+    var sibling = el.nextSibling;
+    while (sibling) {
+      var next = sibling.nextSibling;
+      if (sibling.nodeType === Node.TEXT_NODE) {
+        var cleaned = String(sibling.nodeValue || '').replace(/억/g, '');
+        if (cleaned !== sibling.nodeValue) sibling.nodeValue = cleaned;
+        if (!String(sibling.nodeValue || '').trim()) sibling.remove();
+      } else if (sibling.nodeType === Node.ELEMENT_NODE && String(sibling.textContent || '').trim() === '억') {
+        sibling.remove();
+      }
+      sibling = next;
+    }
+  }
+
+  function normalizeUnitValues() {
+    UNIT_VALUE_IDS.forEach(function (id) {
       var el = byId(id);
       if (!el) return;
+
+      removeOuterUnitNode(el);
+
       var number = numericText(el.textContent);
       if (number == null) return;
-      if (el.textContent.trim() !== number) el.textContent = number;
+      var expected = number + '억';
+      if (el.textContent.trim() !== expected) el.textContent = expected;
     });
   }
 
@@ -88,7 +109,7 @@
 
   function applyFixes() {
     scheduled = false;
-    normalizeOuterUnitValues();
+    normalizeUnitValues();
     updateDepositPresetStyles();
   }
 
@@ -128,16 +149,19 @@
     document.addEventListener('change', scheduleFixes, true);
 
     var observer = new MutationObserver(scheduleFixes);
-    OUTER_EOK_IDS.forEach(function (id) {
+    UNIT_VALUE_IDS.forEach(function (id) {
       var el = byId(id);
-      if (el) observer.observe(el, { childList: true, characterData: true, subtree: true });
+      if (el) {
+        observer.observe(el, { childList: true, characterData: true, subtree: true });
+        if (el.parentNode) observer.observe(el.parentNode, { childList: true, characterData: true, subtree: false });
+      }
     });
 
     applyFixes();
 
-    // 기존 계산 패치가 비동기로 값을 다시 쓰는 경우에도 최종 표시는 숫자만 유지한다.
+    // 선행 패치가 비동기로 값을 다시 쓰더라도 화면에는 단위가 정확히 한 번만 남는다.
     window.setInterval(function () {
-      normalizeOuterUnitValues();
+      normalizeUnitValues();
       updateDepositPresetStyles();
     }, 80);
   }
