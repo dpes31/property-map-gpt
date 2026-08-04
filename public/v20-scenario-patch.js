@@ -62,7 +62,7 @@
         var note = document.createElement('p');
         note.id = 'scenarioLoanNote';
         note.className = 'mt-3 text-xs text-slate-500 leading-relaxed';
-        note.textContent = '※ 시나리오별 총 조달액은 해당 매매가에서 다시 계산합니다. 자동 대출 기준에서는 25억 초과 시 ‘25억 초과 한도’가 적용되므로, 관심 매물가에서 4억 대출이 가능하더라도 플랜 B 최대 매매가가 25억을 넘으면 설정된 초과 구간 한도에 따라 조달액이 달라질 수 있습니다.';
+        note.textContent = '※ 시나리오별 총 조달액은 해당 매매가에서 다시 계산합니다. 자동 대출 기준에서는 25억 초과 시 초과 구간 한도가 적용됩니다.';
         table.parentElement.insertAdjacentElement('afterend', note);
       }
     };
@@ -74,231 +74,190 @@
 })();
 
 (function () {
-  var state = {
-    mode: 'auto',
-    scenario: 'standard',
-    ready: false
-  };
-
-  var scenarioConfig = {
-    optimistic: {
-      label: '낙관',
-      nDeductRate: 40,
-      uTaxType: 'taxfree',
-      uDeductRate: 10,
-      nAcq: 4.95,
-      uAcq: 3.00,
-      nExtraExpense: 0,
-      uExtraExpense: 0
-    },
-    standard: {
-      label: '표준',
-      nDeductRate: 35,
-      uTaxType: 'general',
-      uDeductRate: 10,
-      nAcq: 4.95,
-      uAcq: 3.00,
-      nExtraExpense: 0,
-      uExtraExpense: 0
-    },
-    conservative: {
-      label: '보수',
-      nDeductRate: 25,
-      uTaxType: 'general',
-      uDeductRate: 0,
-      nAcq: 4.80,
-      uAcq: 2.90,
-      nExtraExpense: 0,
-      uExtraExpense: 0
-    }
+  var state = { mode: 'auto', scenario: 'standard', ready: false };
+  var configs = {
+    optimistic: { label: '낙관', nDeductRate: 40, uTaxType: 'taxfree', uDeductRate: 10, nAcq: 4.95, uAcq: 3.00, nExtraExpense: 0, uExtraExpense: 0 },
+    standard: { label: '표준', nDeductRate: 35, uTaxType: 'general', uDeductRate: 10, nAcq: 4.95, uAcq: 3.00, nExtraExpense: 0, uExtraExpense: 0 },
+    conservative: { label: '보수', nDeductRate: 25, uTaxType: 'general', uDeductRate: 0, nAcq: 4.80, uAcq: 2.90, nExtraExpense: 0, uExtraExpense: 0 }
   };
 
   function byId(id) { return document.getElementById(id); }
-  function numberValue(id, fallback) {
-    var el = byId(id);
-    if (!el) return fallback;
-    var n = parseFloat(el.value);
-    return Number.isFinite(n) ? n : fallback;
-  }
-  function setValue(id, value, digits) {
-    var el = byId(id);
-    if (!el) return;
-    el.value = Number(value || 0).toFixed(digits == null ? 2 : digits);
-  }
-  function formatAmount(n) { return Number(n || 0).toFixed(2) + '억'; }
-  function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+  function nval(id, fallback) { var el = byId(id); var n = el ? parseFloat(el.value) : NaN; return Number.isFinite(n) ? n : fallback; }
+  function setValue(id, value, digits) { var el = byId(id); if (el) el.value = Number(value || 0).toFixed(digits == null ? 2 : digits); }
+  function eok(v) { return Number(v || 0).toFixed(2) + '억'; }
+  function won(v) { var x = Number(v || 0); return x >= 1 ? x.toFixed(2) + '억' : Math.round(x * 10000).toLocaleString('ko-KR') + '만원'; }
+  function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
-  function getRateAndDeduction(taxBase) {
-    if (taxBase <= 0.14) return { rate: 0.06, deduction: 0 };
-    if (taxBase <= 0.50) return { rate: 0.15, deduction: 0.0126 };
-    if (taxBase <= 0.88) return { rate: 0.24, deduction: 0.0576 };
-    if (taxBase <= 1.50) return { rate: 0.35, deduction: 0.1544 };
-    if (taxBase <= 3.00) return { rate: 0.38, deduction: 0.1994 };
-    if (taxBase <= 5.00) return { rate: 0.40, deduction: 0.2594 };
-    if (taxBase <= 10.00) return { rate: 0.42, deduction: 0.3594 };
-    return { rate: 0.45, deduction: 0.6594 };
+  function rateRule(base) {
+    if (base <= 0.14) return { rate: 0.06, ded: 0 };
+    if (base <= 0.50) return { rate: 0.15, ded: 0.0126 };
+    if (base <= 0.88) return { rate: 0.24, ded: 0.0576 };
+    if (base <= 1.50) return { rate: 0.35, ded: 0.1544 };
+    if (base <= 3.00) return { rate: 0.38, ded: 0.1994 };
+    if (base <= 5.00) return { rate: 0.40, ded: 0.2594 };
+    if (base <= 10.00) return { rate: 0.42, ded: 0.3594 };
+    return { rate: 0.45, ded: 0.6594 };
   }
-
-  function calcProgressiveTax(taxBase) {
-    taxBase = Math.max(0, taxBase || 0);
-    if (taxBase <= 0) return 0;
-    var rule = getRateAndDeduction(taxBase);
-    var nationalTax = Math.max(0, taxBase * rule.rate - rule.deduction);
-    var localTax = nationalTax * 0.1;
-    return nationalTax + localTax;
+  function taxFromBase(base) {
+    base = Math.max(0, base || 0);
+    if (!base) return { taxBase: 0, rate: 0, progressiveDeduction: 0, nationalTax: 0, localTax: 0, totalTax: 0 };
+    var r = rateRule(base);
+    var national = Math.max(0, base * r.rate - r.ded);
+    return { taxBase: base, rate: r.rate, progressiveDeduction: r.ded, nationalTax: national, localTax: national * 0.1, totalTax: national * 1.1 };
   }
-
-  function calcHighPriceOneHouseTax(opts) {
-    var sell = Math.max(0, opts.sell || 0);
-    if (sell <= 12) return 0;
-    var gain = Math.max(0, sell - (opts.acq || 0) - (opts.extraExpense || 0) - brokerFee(sell));
-    if (gain <= 0) return 0;
-    var taxableRatio = Math.max(0, (sell - 12) / sell);
-    var taxableGain = gain * taxableRatio;
-    var deduction = taxableGain * clamp((opts.deductRate || 0) / 100, 0, 0.8);
-    var taxBase = Math.max(0, taxableGain - deduction - 0.025);
-    return calcProgressiveTax(taxBase);
+  function calcHighPriceOneHouse(sell, acq, extra, deductRate) {
+    var brokerage = brokerFee(sell);
+    var grossGain = Math.max(0, sell - acq - brokerage - extra);
+    var ratio = sell > 12 ? (sell - 12) / sell : 0;
+    var taxableGain = grossGain * ratio;
+    var deductionRate = clamp(deductRate / 100, 0, 0.8);
+    var deductionAmount = taxableGain * deductionRate;
+    var afterDeduction = Math.max(0, taxableGain - deductionAmount);
+    var tax = taxFromBase(Math.max(0, afterDeduction - 0.025));
+    return Object.assign({ sell: sell, acq: acq, brokerage: brokerage, extra: extra, grossGain: grossGain, taxableRatio: ratio, taxableGain: taxableGain, deductRate: deductRate, deductionAmount: deductionAmount, afterDeduction: afterDeduction, kind: 'high' }, tax);
   }
-
-  function calcGeneralTax(opts) {
-    if (opts.taxType === 'taxfree') return 0;
-    var sell = Math.max(0, opts.sell || 0);
-    var gain = Math.max(0, sell - (opts.acq || 0) - (opts.extraExpense || 0) - brokerFee(sell));
-    if (gain <= 0) return 0;
-    var deduction = gain * clamp((opts.deductRate || 0) / 100, 0, 0.3);
-    var taxBase = Math.max(0, gain - deduction - 0.025);
-    return calcProgressiveTax(taxBase);
+  function calcGeneral(sell, acq, extra, deductRate, taxType) {
+    var brokerage = brokerFee(sell);
+    var grossGain = Math.max(0, sell - acq - brokerage - extra);
+    var taxfree = taxType === 'taxfree';
+    var taxableGain = taxfree ? 0 : grossGain;
+    var deductionRate = taxfree ? 0 : clamp(deductRate / 100, 0, 0.3);
+    var deductionAmount = taxableGain * deductionRate;
+    var afterDeduction = Math.max(0, taxableGain - deductionAmount);
+    var tax = taxFromBase(Math.max(0, afterDeduction - 0.025));
+    return Object.assign({ sell: sell, acq: acq, brokerage: brokerage, extra: extra, grossGain: grossGain, taxableRatio: taxfree ? 0 : 1, taxableGain: taxableGain, deductRate: taxfree ? 0 : deductRate, deductionAmount: deductionAmount, afterDeduction: afterDeduction, kind: taxfree ? 'taxfree' : 'general' }, tax);
   }
-
-  function currentParams() {
+  function params() {
+    var cfg = configs[state.scenario] || configs.standard;
     return {
-      nAcq: numberValue('nAcq', scenarioConfig[state.scenario].nAcq),
-      uAcq: numberValue('uAcq', scenarioConfig[state.scenario].uAcq),
-      nExtraExpense: numberValue('nExtraExpense', 0),
-      uExtraExpense: numberValue('uExtraExpense', 0),
-      nDeductRate: numberValue('nDeductRate', scenarioConfig[state.scenario].nDeductRate),
-      uDeductRate: numberValue('uDeductRate', scenarioConfig[state.scenario].uDeductRate),
-      uTaxType: byId('uTaxType') ? byId('uTaxType').value : scenarioConfig[state.scenario].uTaxType
+      nAcq: nval('nAcq', cfg.nAcq),
+      uAcq: nval('uAcq', cfg.uAcq),
+      nExtraExpense: nval('nExtraExpense', cfg.nExtraExpense),
+      uExtraExpense: nval('uExtraExpense', cfg.uExtraExpense),
+      nDeductRate: nval('nDeductRate', cfg.nDeductRate),
+      uDeductRate: nval('uDeductRate', cfg.uDeductRate),
+      uTaxType: byId('uTaxType') ? byId('uTaxType').value : cfg.uTaxType
     };
   }
-
-  function estimateTaxes() {
-    var p = currentParams();
-    var nTax = calcHighPriceOneHouseTax({
-      sell: numberValue('nSell', 15),
-      acq: p.nAcq,
-      extraExpense: p.nExtraExpense,
-      deductRate: p.nDeductRate
-    });
-    var uTax = calcGeneralTax({
-      sell: numberValue('uSell', 4),
-      acq: p.uAcq,
-      extraExpense: p.uExtraExpense,
-      deductRate: p.uDeductRate,
-      taxType: p.uTaxType
-    });
-    return { nTax: nTax, uTax: uTax, total: nTax + uTax, params: p };
+  function compute() {
+    var p = params();
+    var n = calcHighPriceOneHouse(nval('nSell', 15), p.nAcq, p.nExtraExpense, p.nDeductRate);
+    var u = calcGeneral(nval('uSell', 4), p.uAcq, p.uExtraExpense, p.uDeductRate, p.uTaxType);
+    return { n: n, u: u, p: p, total: n.totalTax + u.totalTax };
   }
-
   function applyAutoTaxInputs() {
     if (state.mode !== 'auto') return;
-    var taxes = estimateTaxes();
-    setValue('nCgt', taxes.nTax, 2);
-    setValue('uCgt', taxes.uTax, 2);
+    var t = compute();
+    setValue('nCgt', t.n.totalTax, 2);
+    setValue('uCgt', t.u.totalTax, 2);
   }
-
-  function setTaxInputsMode() {
-    var auto = state.mode === 'auto';
-    ['nCgt', 'uCgt'].forEach(function (id) {
-      var el = byId(id);
-      if (!el) return;
-      el.readOnly = auto;
-      el.classList.toggle('bg-slate-100', auto);
-      el.classList.toggle('cursor-not-allowed', auto);
-    });
+  function basisText(t) {
+    var nBasis = '1세대 1주택 고가주택 가정 / 12억 초과분만 과세 / 장특공제율 ' + t.p.nDeductRate + '%';
+    var uBasis;
+    if (t.p.uTaxType === 'taxfree') uBasis = '비과세 인정 가정 / 예상세액 0원';
+    else if (t.p.uDeductRate > 0) uBasis = '일반과세 가정 / 연 2% × ' + (t.p.uDeductRate / 2) + '년 보유 = 장특공제율 ' + t.p.uDeductRate + '%';
+    else uBasis = '일반과세 보수 가정 / 장특공제 미반영';
+    return { n: nBasis, u: uBasis };
   }
-
-  function updateScenarioButtonLabels() {
-    var currentScenario = state.scenario;
-    ['optimistic', 'standard', 'conservative'].forEach(function (key) {
-      state.scenario = key;
-      var taxes = estimateTaxes();
-      var btn = document.querySelector('.taxPreset[data-tax-scenario="' + key + '"]');
-      if (btn) btn.textContent = scenarioConfig[key].label + ' ' + formatAmount(taxes.total);
-    });
-    state.scenario = currentScenario;
+  function row(title, formula, value, strong) {
+    return '<div class="flex items-start justify-between gap-3 py-2 border-b border-slate-100 last:border-b-0">' +
+      '<div><p class="' + (strong ? 'font-black text-slate-950' : 'font-bold text-slate-600') + '">' + title + '</p>' +
+      '<p class="text-[11px] text-slate-500 mt-0.5">' + formula + '</p></div>' +
+      '<p class="' + (strong ? 'text-lg text-rose-700' : 'text-sm text-slate-900') + ' font-black num whitespace-nowrap">' + value + '</p>' +
+      '</div>';
   }
-
-  function styleScenarioButtons() {
-    document.querySelectorAll('.taxPreset').forEach(function (btn) {
-      var active = btn.getAttribute('data-tax-scenario') === state.scenario && state.mode === 'auto';
-      btn.className = active
-        ? 'taxPreset rounded-xl border py-2 font-bold transition bg-rose-600 text-white border-rose-600 shadow-sm'
-        : 'taxPreset rounded-xl border py-2 font-bold transition bg-white text-rose-800 border-rose-200';
-    });
+  function breakdownCard(title, subtitle, c, high) {
+    var pct = Math.round((c.taxableRatio || 0) * 1000) / 10;
+    var rate = c.rate ? Math.round(c.rate * 100) + '%' : '-';
+    var body = '';
+    body += row('1. 전체 양도차익', eok(c.sell) + ' - 취득가 ' + eok(c.acq) + ' - 중개보수 ' + eok(c.brokerage) + ' - 필요경비 ' + eok(c.extra), eok(c.grossGain), false);
+    if (high) body += row('2. 12억 초과 과세대상 차익', eok(c.grossGain) + ' × (매도가 - 12억) / 매도가 = ' + pct + '%', eok(c.taxableGain), false);
+    else if (c.kind === 'taxfree') body += row('2. 과세대상 차익', '비과세 인정 가정', '0.00억', false);
+    else body += row('2. 과세대상 차익', '일반과세이므로 양도차익 100% 과세대상', eok(c.taxableGain), false);
+    body += row('3. 장특공제 차감 후', eok(c.taxableGain) + ' × (1 - ' + c.deductRate + '%)', eok(c.afterDeduction), false);
+    body += row('4. 기본공제 후 과세표준', eok(c.afterDeduction) + ' - 250만원', eok(c.taxBase), false);
+    body += row('5. 세율·지방소득세 반영', '누진세율 ' + rate + ' - 누진공제 ' + won(c.progressiveDeduction) + ' + 지방소득세 10%', eok(c.totalTax), true);
+    return '<article class="rounded-2xl bg-white border border-rose-100 p-4">' +
+      '<div class="flex items-start justify-between gap-3 mb-3"><div><p class="text-xs font-black text-rose-700">' + subtitle + '</p><h4 class="text-base md:text-lg font-black text-slate-950 mt-0.5">' + title + '</h4></div>' +
+      '<div class="text-right"><p class="text-[11px] font-bold text-slate-500">예상세액</p><p class="text-xl font-black text-rose-700 num">' + eok(c.totalTax) + '</p></div></div>' +
+      '<div class="text-xs">' + body + '</div></article>';
   }
+  function findTaxCard() { var btn = document.querySelector('.taxPreset'); return btn ? btn.closest('.rounded-2xl') : null; }
 
-  function renderTaxNote() {
+  function renderExplanation() {
+    var card = findTaxCard();
+    if (!card || !byId('nAcq') || typeof brokerFee !== 'function') return;
+    var grid = card.parentElement;
+    if (grid) grid.className = 'grid grid-cols-1 gap-3 mb-4';
+    var t = compute();
+    var basis = basisText(t);
     var note = byId('taxScenarioNote');
-    if (!note) return;
-    if (state.mode !== 'auto') {
-      note.innerHTML = '<p><strong>직접 입력 기준</strong></p><p>· 현재 입력된 예상 양도세·지방세 금액을 그대로 차감합니다.</p>';
-      return;
+    if (note) {
+      note.innerHTML = '<div class="space-y-2">' +
+        '<p><strong>' + (configs[state.scenario] || configs.standard).label + ' 산출 기준 · 합계 ' + eok(t.total) + '</strong></p>' +
+        '<div class="grid grid-cols-1 lg:grid-cols-2 gap-2">' +
+        '<div class="rounded-xl bg-white/70 border border-rose-100 p-3"><p class="font-black text-rose-950">녹번집</p><p>· ' + basis.n + '</p></div>' +
+        '<div class="rounded-xl bg-white/70 border border-rose-100 p-3"><p class="font-black text-rose-950">의정부집</p><p>· ' + basis.u + '</p></div>' +
+        '</div>' +
+        '<p class="text-rose-700">계산식: 양도차익 = 매도가 - 취득가 - 매도중개보수 - 추가 필요경비 → 장특공제 → 기본공제 250만원 → 누진세율 → 지방소득세 10%</p>' +
+        '<p class="text-rose-600">※ 매도가·취득가·장특공제율이 바뀌면 예상세액을 다시 계산합니다. 세무 신고용 확정 계산은 아닙니다.</p>' +
+        '</div>';
     }
-    var taxes = estimateTaxes();
-    var cfg = scenarioConfig[state.scenario];
-    var uText = taxes.params.uTaxType === 'taxfree' ? '비과세 0원' : '일반과세';
-    note.innerHTML = '' +
-      '<p><strong>' + cfg.label + ' 자동 산출 기준</strong> · 합계 ' + formatAmount(taxes.total) + '</p>' +
-      '<p>· 녹번: 1세대1주택 고가주택 가정, 12억 초과분 과세, 장특공제율 ' + taxes.params.nDeductRate + '%.</p>' +
-      '<p>· 의정부: ' + uText + ', 장특공제율 ' + taxes.params.uDeductRate + '%.</p>' +
-      '<p class="text-rose-600">※ 매도가 변경 시 예상세액을 다시 계산합니다. 세무 신고용 확정 계산은 아닙니다.</p>';
+    var wrap = byId('taxBreakdownWrap');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = 'taxBreakdownWrap';
+      wrap.className = 'mt-4 grid grid-cols-1 xl:grid-cols-2 gap-3';
+      var panel = byId('taxAutoPanel');
+      if (panel) panel.insertAdjacentElement('afterend', wrap); else card.appendChild(wrap);
+    }
+    wrap.innerHTML = breakdownCard('녹번 주택', basis.n, t.n, true) + breakdownCard('의정부 주택', basis.u, t.u, false);
   }
 
   function refreshTaxUi() {
-    updateScenarioButtonLabels();
-    styleScenarioButtons();
-    renderTaxNote();
-    setTaxInputsMode();
+    var t = compute();
+    ['optimistic','standard','conservative'].forEach(function (key) {
+      var old = state.scenario;
+      state.scenario = key;
+      var tt = compute();
+      var btn = document.querySelector('.taxPreset[data-tax-scenario="' + key + '"]');
+      if (btn) btn.textContent = configs[key].label + ' ' + eok(tt.total);
+      state.scenario = old;
+    });
+    document.querySelectorAll('.taxPreset').forEach(function (btn) {
+      var active = btn.getAttribute('data-tax-scenario') === state.scenario && state.mode === 'auto';
+      btn.className = active ? 'taxPreset rounded-xl border py-2 font-bold transition bg-rose-600 text-white border-rose-600 shadow-sm' : 'taxPreset rounded-xl border py-2 font-bold transition bg-white text-rose-800 border-rose-200';
+    });
+    ['nCgt','uCgt'].forEach(function (id) { var el = byId(id); if (el) { el.readOnly = state.mode === 'auto'; el.classList.toggle('bg-slate-100', state.mode === 'auto'); } });
+    renderExplanation();
   }
-
-  function runFullRecalc() {
+  function recalcAll() {
     applyAutoTaxInputs();
     if (typeof calculate === 'function') calculate();
-    refreshTaxUi();
+    window.setTimeout(refreshTaxUi, 0);
   }
-
-  function addTaxControlPanel() {
+  function addTaxPanel() {
     if (byId('taxAutoPanel')) return;
-    var buttons = document.querySelectorAll('.taxPreset');
+    var buttons = Array.prototype.slice.call(document.querySelectorAll('.taxPreset'));
     if (!buttons.length) return;
-
-    buttons.forEach(function (btn, index) {
-      var scenario = index === 0 ? 'optimistic' : index === 1 ? 'standard' : 'conservative';
+    buttons.forEach(function (btn, idx) {
+      var key = idx === 0 ? 'optimistic' : idx === 1 ? 'standard' : 'conservative';
       var clone = btn.cloneNode(true);
-      clone.setAttribute('data-tax-scenario', scenario);
-      clone.removeAttribute('data-ncgt');
-      clone.removeAttribute('data-ucgt');
-      clone.addEventListener('click', function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        state.mode = 'auto';
-        state.scenario = scenario;
-        var mode = byId('taxMode');
-        if (mode) mode.value = 'auto';
-        var cfg = scenarioConfig[scenario];
-        setValue('nAcq', cfg.nAcq, 2);
-        setValue('uAcq', cfg.uAcq, 2);
-        setValue('nExtraExpense', cfg.nExtraExpense, 2);
-        setValue('uExtraExpense', cfg.uExtraExpense, 2);
-        setValue('nDeductRate', cfg.nDeductRate, 0);
-        setValue('uDeductRate', cfg.uDeductRate, 0);
+      clone.setAttribute('data-tax-scenario', key);
+      clone.removeAttribute('data-ncgt'); clone.removeAttribute('data-ucgt');
+      clone.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        state.mode = 'auto'; state.scenario = key;
+        var cfg = configs[key];
+        setValue('nAcq', cfg.nAcq, 2); setValue('uAcq', cfg.uAcq, 2);
+        setValue('nExtraExpense', cfg.nExtraExpense, 2); setValue('uExtraExpense', cfg.uExtraExpense, 2);
+        setValue('nDeductRate', cfg.nDeductRate, 0); setValue('uDeductRate', cfg.uDeductRate, 0);
         if (byId('uTaxType')) byId('uTaxType').value = cfg.uTaxType;
-        runFullRecalc();
+        if (byId('taxMode')) byId('taxMode').value = 'auto';
+        recalcAll();
       }, true);
       btn.parentNode.replaceChild(clone, btn);
     });
-
     var container = document.querySelector('.taxPreset') && document.querySelector('.taxPreset').closest('.rounded-2xl');
     if (!container) return;
     var panel = document.createElement('div');
@@ -314,52 +273,24 @@
       '<label class="font-bold text-slate-600">의정부 과세유형<select id="uTaxType" class="mt-1 w-full rounded-xl border border-slate-200 px-2 py-2 bg-white font-black"><option value="general" selected>일반과세</option><option value="taxfree">비과세</option></select></label>' +
       '<label class="font-bold text-slate-600">녹번 장특공제율<input id="nDeductRate" type="number" value="35" step="1" class="mt-1 w-full rounded-xl border border-slate-200 px-2 py-2 text-right font-black num" /></label>' +
       '<label class="font-bold text-slate-600">의정부 장특공제율<input id="uDeductRate" type="number" value="10" step="1" class="mt-1 w-full rounded-xl border border-slate-200 px-2 py-2 text-right font-black num" /></label>' +
-      '</div>' +
-      '<p class="mt-2 text-[11px] text-rose-700 leading-relaxed">계산식: 양도차익 = 매도가 - 취득가 - 매도중개보수 - 추가 필요경비 → 장특공제 → 기본공제 250만원 → 누진세율 → 지방소득세 10%.</p>';
+      '</div>';
     container.appendChild(panel);
   }
-
-  function bindTaxEvents() {
-    var taxInputs = ['nSell', 'uSell', 'nAcq', 'uAcq', 'nExtraExpense', 'uExtraExpense', 'nDeductRate', 'uDeductRate', 'uTaxType'];
-    taxInputs.forEach(function (id) {
-      var el = byId(id);
-      if (!el || el.getAttribute('data-tax-bound') === '1') return;
+  function bind() {
+    ['nSell','uSell','nAcq','uAcq','nExtraExpense','uExtraExpense','nDeductRate','uDeductRate','uTaxType','taxMode'].forEach(function (id) {
+      var el = byId(id); if (!el || el.getAttribute('data-tax-bound') === '1') return;
       el.setAttribute('data-tax-bound', '1');
-      ['input', 'change'].forEach(function (eventName) {
-        el.addEventListener(eventName, function () {
-          window.setTimeout(function () {
-            if (id === 'uTaxType') state.scenario = 'standard';
-            applyAutoTaxInputs();
-            if (typeof calculate === 'function') calculate();
-            refreshTaxUi();
-          }, 0);
-        });
-      });
+      el.addEventListener('input', function () { if (id === 'taxMode') state.mode = el.value; window.setTimeout(recalcAll, 0); });
+      el.addEventListener('change', function () { if (id === 'taxMode') state.mode = el.value; window.setTimeout(recalcAll, 0); });
     });
-
-    var mode = byId('taxMode');
-    if (mode && mode.getAttribute('data-tax-bound') !== '1') {
-      mode.setAttribute('data-tax-bound', '1');
-      mode.addEventListener('change', function () {
-        state.mode = mode.value;
-        runFullRecalc();
-      });
-    }
   }
-
-  function initTaxPatch() {
+  function boot() {
     if (state.ready) return;
-    if (typeof brokerFee !== 'function' || typeof calculate !== 'function' || !byId('nSell') || !byId('uSell')) {
-      window.setTimeout(initTaxPatch, 50);
-      return;
-    }
+    if (typeof brokerFee !== 'function' || typeof calculate !== 'function' || !byId('nSell') || !byId('uSell')) { window.setTimeout(boot, 50); return; }
     state.ready = true;
-    addTaxControlPanel();
-    bindTaxEvents();
-    applyAutoTaxInputs();
-    if (typeof calculate === 'function') calculate();
-    refreshTaxUi();
+    addTaxPanel();
+    bind();
+    recalcAll();
   }
-
-  initTaxPatch();
+  boot();
 })();
