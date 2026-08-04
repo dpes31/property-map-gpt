@@ -11,11 +11,25 @@ export default function HomePage() {
     const iframeBody = iframeDoc?.body;
     if (!iframeDoc || !iframeBody) return;
 
+    const appendTargetPriceHardSync = () => {
+      if (iframeDoc.getElementById('target-price-hard-sync')) return;
+      const syncScript = iframeDoc.createElement('script');
+      syncScript.id = 'target-price-hard-sync';
+      syncScript.src = '/target-price-hard-sync.js?v=target-price-fix-1';
+      iframeBody.appendChild(syncScript);
+    };
+
     const appendFinalUiPatch = () => {
-      if (iframeDoc.getElementById('final-ui-patch')) return;
+      const existingFinal = iframeDoc.getElementById('final-ui-patch');
+      if (existingFinal) {
+        appendTargetPriceHardSync();
+        return;
+      }
+
       const finalScript = iframeDoc.createElement('script');
       finalScript.id = 'final-ui-patch';
       finalScript.src = '/final-ui-patch.js?v=target-result-sync-1';
+      finalScript.onload = appendTargetPriceHardSync;
       iframeBody.appendChild(finalScript);
     };
 
