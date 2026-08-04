@@ -134,6 +134,12 @@
     });
 
     applyFixes();
+
+    // 기존 계산 패치가 비동기로 값을 다시 쓰는 경우에도 최종 표시는 숫자만 유지한다.
+    window.setInterval(function () {
+      normalizeOuterUnitValues();
+      updateDepositPresetStyles();
+    }, 80);
   }
 
   function boot() {
