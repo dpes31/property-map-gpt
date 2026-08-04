@@ -1,11 +1,104 @@
 (function () {
   function byId(id) { return document.getElementById(id); }
+  function num(v, fallback) {
+    var n = parseFloat(v);
+    return Number.isFinite(n) ? n : (fallback || 0);
+  }
+  function fmt2(v) { return Number(v || 0).toFixed(2); }
+  function eok(v) { return fmt2(v) + '억'; }
+  function setText(id, text) {
+    var el = byId(id);
+    if (el) el.textContent = text;
+  }
+  function setHtml(id, html) {
+    var el = byId(id);
+    if (el) el.innerHTML = html;
+  }
+  function setMoney(id, value) { setText(id, eok(value)); }
+  function resultHtml(diff, dark) {
+    var ok = diff >= 0;
+    var cls = ok ? (dark ? 'text-emerald-300' : 'text-emerald-700') : (dark ? 'text-rose-300' : 'text-rose-700');
+    var label = ok ? '잔여 ' : '부족 ';
+    return '<span class="' + cls + ' font-black">' + label + eok(Math.abs(diff)) + '</span>';
+  }
+
+  function targetPriceValue() {
+    var input = byId('targetPrice');
+    var range = byId('targetPriceRange');
+    var value = input ? num(input.value, NaN) : NaN;
+    if (!Number.isFinite(value) && range) value = num(range.value, 23.6);
+    return Number.isFinite(value) ? value : 23.6;
+  }
+
+  function updateTargetPriceMirror() {
+    var mirror = byId('targetPriceMirror');
+    if (!mirror) return;
+    mirror.textContent = '현재 관심 매물가: ' + fmt2(targetPriceValue()) + '억 · 이 금액 기준으로 핵심 결과와 시나리오 표를 다시 계산합니다.';
+  }
+
+  function forceResultSync() {
+    if (typeof calcAt !== 'function') return;
+    var price = targetPriceValue();
+    var r = calcAt(price);
+
+    // 비용 요약/상세 계산 결과: 관심 매물 매매가가 23.60억으로 잔류하지 않도록 직접 동기화.
+    setMoney('sumTargetPrice', r.price);
+    setMoney('sumLoanApplied', r.loan);
+    if (typeof loanNote === 'function') setText('sumLoanTier', loanNote(r.price));
+    setText('costBase', fmt2(r.basePriceNeed));
+    setMoney('costAcq', r.acqTax);
+    setMoney('costBroker', r.buyBroker);
+    setMoney('costOther', r.otherCost + r.repairCost);
+    setMoney('costTotal', r.purchaseCost);
+
+    // 상세 계산 결과 PLAN A/B.
+    setMoney('planAEquity', r.equityBeforeLoan);
+    setMoney('planALoan', r.loan);
+    setMoney('planATotal', r.planATotal);
+    setMoney('planACost', r.purchaseCost);
+    setHtml('planARemain', resultHtml(r.planARemain, true));
+    setHtml('planAReserveResult', resultHtml(r.planAAfterReserve, true));
+
+    setMoney('planBEquity', r.equityBeforeLoan);
+    setMoney('planBDeposit', r.depositUse);
+    setMoney('planBLoan', r.loan);
+    setMoney('planBTotal', r.planBTotal);
+    setMoney('planBCost', r.purchaseCost);
+    setHtml('planBRemain', resultHtml(r.planBRemain, true));
+    setHtml('planBReserveResult', resultHtml(r.planBAfterReserve, true));
+
+    // 핵심 결과 카드.
+    setMoney('cardPurchaseCost', r.purchaseCost);
+    setMoney('cardLoan', r.loan);
+    setHtml('cardPlanA', resultHtml(r.planAAfterReserve, false));
+    setHtml('cardPlanB', resultHtml(r.planBAfterReserve, false));
+    if (typeof findMaxPrice === 'function') setText('cardMaxA', fmt2(findMaxPrice('A')));
+    var cardPurchaseNote = byId('cardPurchaseNote');
+    if (cardPurchaseNote) cardPurchaseNote.textContent = '매매가 ' + fmt2(r.price) + '억 + 취득세·중개·기타비용';
+    var cardLoanNote = byId('cardLoanNote');
+    if (cardLoanNote && typeof loanNote === 'function') cardLoanNote.textContent = loanNote(r.price);
+
+    // 상단 산출근거.
+    setMoney('topCurrentCash', r.currentCash);
+    setMoney('topNNet', r.nNet);
+    setMoney('topUNet', r.uNet);
+    setMoney('topStock', r.stock);
+    setMoney('topEquity', r.equityBeforeLoan);
+    setMoney('topEquityMirror', r.equityBeforeLoan);
+    setMoney('topEquityForPlanB', r.equityBeforeLoan);
+    setMoney('topDepositUse', r.depositUse);
+    setMoney('topEquityAfterDeposit', r.equityBeforeLoan + r.depositUse);
+    setMoney('topEquityAfterDepositMini', r.equityBeforeLoan + r.depositUse);
+
+    updateTargetPriceMirror();
+  }
 
   function safeCalculate() {
     window.requestAnimationFrame(function () {
       if (typeof calculate === 'function') calculate();
+      forceResultSync();
       if (typeof renderScenarioRows === 'function') renderScenarioRows();
-      updateTargetPriceMirror();
+      forceResultSync();
     });
   }
 
@@ -31,9 +124,7 @@
     if (!note || note.getAttribute('data-black-text-bound') === '1') return;
     note.setAttribute('data-black-text-bound', '1');
     makeTextBlack(note);
-    var observer = new MutationObserver(function () {
-      makeTextBlack(note);
-    });
+    var observer = new MutationObserver(function () { makeTextBlack(note); });
     observer.observe(note, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
   }
 
@@ -60,9 +151,7 @@
     var input = byId('spouseStock');
     if (!input || input.getAttribute('data-final-stock-bound') === '1') return;
     input.setAttribute('data-final-stock-bound', '1');
-    ['input', 'change'].forEach(function (eventName) {
-      input.addEventListener(eventName, safeCalculate);
-    });
+    ['input', 'change'].forEach(function (eventName) { input.addEventListener(eventName, safeCalculate); });
   }
 
   function findSectionByHeading(text) {
@@ -99,14 +188,6 @@
       priceBox.appendChild(mirror);
     }
     updateTargetPriceMirror();
-  }
-
-  function updateTargetPriceMirror() {
-    var mirror = byId('targetPriceMirror');
-    var input = byId('targetPrice');
-    if (!mirror || !input) return;
-    var v = parseFloat(input.value);
-    mirror.textContent = '현재 관심 매물가: ' + (Number.isFinite(v) ? v.toFixed(2) : '0.00') + '억 · 이 금액 기준으로 핵심 결과와 시나리오 표를 다시 계산합니다.';
   }
 
   function syncPair(inputId, rangeId) {
@@ -154,9 +235,7 @@
       var el = byId(id);
       if (!el || el.getAttribute('data-final-calc-bound') === '1') return;
       el.setAttribute('data-final-calc-bound', '1');
-      ['input', 'change'].forEach(function (eventName) {
-        el.addEventListener(eventName, safeCalculate);
-      });
+      ['input', 'change', 'keyup'].forEach(function (eventName) { el.addEventListener(eventName, safeCalculate); });
     });
 
     Array.from(document.querySelectorAll('input[name="propertyType"]')).forEach(function (el) {
