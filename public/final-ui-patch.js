@@ -4,37 +4,75 @@
     return btn ? btn.closest('.rounded-2xl') : null;
   }
 
+  function makeTextBlack(root) {
+    if (!root) return;
+    var colorClasses = [
+      'text-rose-50','text-rose-100','text-rose-200','text-rose-300','text-rose-400','text-rose-500',
+      'text-rose-600','text-rose-700','text-rose-800','text-rose-900','text-rose-950'
+    ];
+    [root].concat(Array.from(root.querySelectorAll('*'))).forEach(function (el) {
+      colorClasses.forEach(function (cls) { el.classList.remove(cls); });
+      if (el.tagName !== 'BUTTON') el.classList.add('text-slate-900');
+    });
+  }
+
+  function observeTaxNoteColor() {
+    var note = document.getElementById('taxScenarioNote');
+    if (!note || note.getAttribute('data-black-text-bound') === '1') return;
+    note.setAttribute('data-black-text-bound', '1');
+    makeTextBlack(note);
+    var observer = new MutationObserver(function () {
+      makeTextBlack(note);
+    });
+    observer.observe(note, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  }
+
   function makeTaxFormulaCollapsible() {
     var card = findTaxCard();
     if (!card || card.getAttribute('data-final-tax-collapse') === '1') return false;
     if (!document.getElementById('taxAutoPanel') || !document.getElementById('taxBreakdownWrap')) return false;
 
     var heading = Array.from(card.querySelectorAll('p')).find(function (p) {
-      return (p.textContent || '').trim() === '예상 양도세';
+      var text = (p.textContent || '').trim();
+      return text === '예상 양도세' || text === '예상 양도세 산출 공식';
     });
     if (!heading) return false;
 
-    heading.textContent = '예상 양도세 산출 공식';
+    var originalHeader = heading.closest('.flex') || heading.parentElement;
 
-    var header = heading.closest('.flex') || heading.parentElement;
-    if (!header) return false;
+    var header = document.createElement('div');
+    header.id = 'taxFormulaHeader';
+    header.className = 'flex items-center justify-between gap-3';
+
+    var title = document.createElement('p');
+    title.className = 'font-black text-slate-950';
+    title.textContent = '예상 양도세 산출 공식';
 
     var button = document.createElement('button');
     button.type = 'button';
-    button.className = 'mt-2 inline-flex items-center rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-50 transition';
+    button.className = 'inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-black text-slate-800 hover:bg-slate-50 transition shrink-0';
     button.textContent = '계산 과정 열기 ▼';
 
-    var titleBox = heading.parentElement || header;
-    titleBox.appendChild(button);
+    header.appendChild(title);
+    header.appendChild(button);
 
     var body = document.createElement('div');
     body.id = 'taxFormulaCollapseBody';
     body.className = 'hidden mt-3';
 
     Array.from(card.children).forEach(function (child) {
-      if (child !== header && child !== body) body.appendChild(child);
+      if (child === originalHeader) {
+        child.remove();
+      } else {
+        body.appendChild(child);
+      }
     });
+
+    card.appendChild(header);
     card.appendChild(body);
+
+    makeTextBlack(document.getElementById('taxScenarioNote'));
+    observeTaxNoteColor();
 
     button.addEventListener('click', function () {
       var isHidden = body.classList.contains('hidden');
@@ -57,6 +95,7 @@
 
   function applyFinalUiPatch() {
     removeLegacyExpansionModule();
+    observeTaxNoteColor();
     var ok = makeTaxFormulaCollapsible();
     if (!ok) window.setTimeout(applyFinalUiPatch, 120);
   }
