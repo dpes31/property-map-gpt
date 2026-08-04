@@ -7,6 +7,7 @@
   function makeTaxFormulaCollapsible() {
     var card = findTaxCard();
     if (!card || card.getAttribute('data-final-tax-collapse') === '1') return false;
+    if (!document.getElementById('taxAutoPanel') || !document.getElementById('taxBreakdownWrap')) return false;
 
     var heading = Array.from(card.querySelectorAll('p')).find(function (p) {
       return (p.textContent || '').trim() === '예상 양도세';
@@ -46,15 +47,12 @@
   }
 
   function removeLegacyExpansionModule() {
-    var removed = false;
     Array.from(document.querySelectorAll('section')).forEach(function (section) {
       var text = section.textContent || '';
       if (text.indexOf('후순위 확장 모듈') > -1 || text.indexOf('후순위 확장') > -1) {
         section.remove();
-        removed = true;
       }
     });
-    return removed;
   }
 
   function applyFinalUiPatch() {
