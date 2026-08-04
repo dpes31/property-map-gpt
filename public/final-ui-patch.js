@@ -27,6 +27,24 @@
     observer.observe(note, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
   }
 
+  function removeStockPresetBox() {
+    Array.from(document.querySelectorAll('.stockPreset')).forEach(function (button) {
+      var box = button.closest('.rounded-2xl');
+      if (box) box.remove();
+    });
+  }
+
+  function bindStockInputRefresh() {
+    var input = document.getElementById('spouseStock');
+    if (!input || input.getAttribute('data-final-stock-bound') === '1') return;
+    input.setAttribute('data-final-stock-bound', '1');
+    ['input', 'change'].forEach(function (eventName) {
+      input.addEventListener(eventName, function () {
+        if (typeof calculate === 'function') calculate();
+      });
+    });
+  }
+
   function makeTaxFormulaCollapsible() {
     var card = findTaxCard();
     if (!card || card.getAttribute('data-final-tax-collapse') === '1') return false;
@@ -95,6 +113,8 @@
 
   function applyFinalUiPatch() {
     removeLegacyExpansionModule();
+    removeStockPresetBox();
+    bindStockInputRefresh();
     observeTaxNoteColor();
     var ok = makeTaxFormulaCollapsible();
     if (!ok) window.setTimeout(applyFinalUiPatch, 120);
