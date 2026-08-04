@@ -15,7 +15,7 @@ export default function HomePage() {
       if (iframeDoc.getElementById('detail-ui-fix')) return;
       const detailScript = iframeDoc.createElement('script');
       detailScript.id = 'detail-ui-fix';
-      detailScript.src = '/detail-ui-fix.js?v=deposit-button-unit-fix-2';
+      detailScript.src = '/detail-ui-fix.js?v=deposit-button-unit-fix-3';
       iframeBody.appendChild(detailScript);
     };
 
