@@ -8,11 +8,25 @@ export default function HomePage() {
   function injectPatch() {
     const iframe = iframeRef.current;
     const doc = iframe?.contentDocument;
-    if (!doc || doc.getElementById('v20-scenario-patch')) return;
+    if (!doc) return;
+
+    function appendTaxExplainPatch() {
+      if (doc.getElementById('v21-tax-explain-patch')) return;
+      const taxScript = doc.createElement('script');
+      taxScript.id = 'v21-tax-explain-patch';
+      taxScript.src = '/v21-tax-explain-patch.js';
+      doc.body.appendChild(taxScript);
+    }
+
+    if (doc.getElementById('v20-scenario-patch')) {
+      appendTaxExplainPatch();
+      return;
+    }
 
     const script = doc.createElement('script');
     script.id = 'v20-scenario-patch';
     script.src = '/v20-scenario-patch.js';
+    script.onload = appendTaxExplainPatch;
     doc.body.appendChild(script);
   }
 
