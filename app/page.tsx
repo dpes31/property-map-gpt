@@ -15,7 +15,7 @@ export default function HomePage() {
       if (iframeDoc.getElementById('final-ui-patch')) return;
       const finalScript = iframeDoc.createElement('script');
       finalScript.id = 'final-ui-patch';
-      finalScript.src = '/final-ui-patch.js?v=stock-default-5-1';
+      finalScript.src = '/final-ui-patch.js?v=control-sync-1';
       iframeBody.appendChild(finalScript);
     };
 
