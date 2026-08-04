@@ -27,6 +27,14 @@
     observer.observe(note, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
   }
 
+  function setDefaultStockValue() {
+    var input = document.getElementById('spouseStock');
+    if (!input || input.getAttribute('data-final-stock-default') === '1') return;
+    input.value = '5.0';
+    input.setAttribute('data-final-stock-default', '1');
+    if (typeof calculate === 'function') calculate();
+  }
+
   function removeStockPresetBox() {
     Array.from(document.querySelectorAll('.stockPreset')).forEach(function (button) {
       var box = button.closest('.rounded-2xl');
@@ -114,6 +122,7 @@
   function applyFinalUiPatch() {
     removeLegacyExpansionModule();
     removeStockPresetBox();
+    setDefaultStockValue();
     bindStockInputRefresh();
     observeTaxNoteColor();
     var ok = makeTaxFormulaCollapsible();
