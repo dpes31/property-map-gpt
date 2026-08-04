@@ -7,27 +7,28 @@ export default function HomePage() {
 
   function injectPatch() {
     const iframe = iframeRef.current;
-    const doc = iframe?.contentDocument;
-    if (!doc) return;
+    const iframeDoc = iframe?.contentDocument;
+    const iframeBody = iframeDoc?.body;
+    if (!iframeDoc || !iframeBody) return;
 
-    function appendFinalUiPatch() {
-      if (doc.getElementById('final-ui-patch')) return;
-      const finalScript = doc.createElement('script');
+    const appendFinalUiPatch = () => {
+      if (iframeDoc.getElementById('final-ui-patch')) return;
+      const finalScript = iframeDoc.createElement('script');
       finalScript.id = 'final-ui-patch';
       finalScript.src = '/final-ui-patch.js?v=tax-collapse-1';
-      doc.body.appendChild(finalScript);
-    }
+      iframeBody.appendChild(finalScript);
+    };
 
-    if (doc.getElementById('v20-scenario-patch')) {
+    if (iframeDoc.getElementById('v20-scenario-patch')) {
       appendFinalUiPatch();
       return;
     }
 
-    const script = doc.createElement('script');
+    const script = iframeDoc.createElement('script');
     script.id = 'v20-scenario-patch';
     script.src = '/v20-scenario-patch.js?v=cgt-explain-2';
     script.onload = appendFinalUiPatch;
-    doc.body.appendChild(script);
+    iframeBody.appendChild(script);
   }
 
   return (
