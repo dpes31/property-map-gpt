@@ -15,7 +15,7 @@ export default function HomePage() {
       if (iframeDoc.getElementById('final-ui-patch')) return;
       const finalScript = iframeDoc.createElement('script');
       finalScript.id = 'final-ui-patch';
-      finalScript.src = '/final-ui-patch.js?v=tax-collapse-2';
+      finalScript.src = '/final-ui-patch.js?v=stock-box-remove-1';
       iframeBody.appendChild(finalScript);
     };
 
